@@ -1,0 +1,5 @@
+/bin/
+*.zip
+*.exe
+.env
+.DS_Store
