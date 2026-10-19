@@ -1,0 +1,6 @@
+-- Generated from ent/schema; regenerate with gar-importer migrate --write-sql <file>.
+CREATE SCHEMA IF NOT EXISTS gar;
+SET search_path TO gar;
+CREATE SEQUENCE IF NOT EXISTS "param_id_seq" OWNED BY "param"."id";
+ALTER TABLE "param" ALTER COLUMN "id" SET DEFAULT nextval('"param_id_seq"'), ADD COLUMN "source_id" bigint NOT NULL, ADD COLUMN "source" text NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX "param_source_id_idx" ON "param" ("source", "source_id");

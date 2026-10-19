@@ -1,0 +1,117 @@
+[
+  {
+    "kind": "AS_ADDR_OBJ",
+    "xml": "<OBJECT ID=\"1\" OBJECTID=\"1\" OBJECTGUID=\"ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e\" CHANGEID=\"1\" NAME=\"1\" TYPENAME=\"1\" LEVEL=\"1\" OPERTYPEID=\"1\" PREVID=\"1\" NEXTID=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTUAL=\"1\" ISACTIVE=\"1\" />",
+    "model": "AddrObj"
+  },
+  {
+    "kind": "AS_ADDR_OBJ_DIVISION",
+    "xml": "<ITEM ID=\"1\" PARENTID=\"1\" CHILDID=\"1\" CHANGEID=\"1\" />",
+    "model": "AddrObjDivision"
+  },
+  {
+    "kind": "AS_ADDR_OBJ_TYPES",
+    "xml": "<ADDRESSOBJECTTYPE ID=\"1\" LEVEL=\"1\" SHORTNAME=\"1\" NAME=\"1\" DESC=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"true\" />",
+    "model": "AddrObjType"
+  },
+  {
+    "kind": "AS_ADM_HIERARCHY",
+    "xml": "<ITEM ID=\"1\" OBJECTID=\"1\" PARENTOBJID=\"1\" CHANGEID=\"1\" REGIONCODE=\"1\" AREACODE=\"1\" CITYCODE=\"1\" PLACECODE=\"1\" PLANCODE=\"1\" STREETCODE=\"1\" PREVID=\"1\" NEXTID=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"1\" PATH=\"1.2\" />",
+    "model": "AdmHierarchyItem"
+  },
+  {
+    "kind": "AS_APARTMENTS",
+    "xml": "<APARTMENT ID=\"1\" OBJECTID=\"1\" OBJECTGUID=\"ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e\" CHANGEID=\"1\" NUMBER=\"1\" APARTTYPE=\"1\" OPERTYPEID=\"1\" PREVID=\"1\" NEXTID=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTUAL=\"1\" ISACTIVE=\"1\" />",
+    "model": "Apartment"
+  },
+  {
+    "kind": "AS_APARTMENT_TYPES",
+    "xml": "<APARTMENTTYPE ID=\"1\" NAME=\"1\" SHORTNAME=\"1\" DESC=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"true\" />",
+    "model": "ApartmentType"
+  },
+  {
+    "kind": "AS_CARPLACES",
+    "xml": "<CARPLACE ID=\"1\" OBJECTID=\"1\" OBJECTGUID=\"ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e\" CHANGEID=\"1\" NUMBER=\"1\" OPERTYPEID=\"1\" PREVID=\"1\" NEXTID=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTUAL=\"1\" ISACTIVE=\"1\" />",
+    "model": "Carplace"
+  },
+  {
+    "kind": "AS_CHANGE_HISTORY",
+    "xml": "<ITEM CHANGEID=\"1\" OBJECTID=\"1\" ADROBJECTID=\"ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e\" OPERTYPEID=\"1\" NDOCID=\"1\" CHANGEDATE=\"2024-11-23\" />",
+    "model": "ChangeHistory"
+  },
+  {
+    "kind": "AS_HOUSES",
+    "xml": "<HOUSE ID=\"1\" OBJECTID=\"1\" OBJECTGUID=\"ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e\" CHANGEID=\"1\" HOUSENUM=\"1\" ADDNUM1=\"1\" ADDNUM2=\"1\" HOUSETYPE=\"1\" ADDTYPE1=\"1\" ADDTYPE2=\"1\" OPERTYPEID=\"1\" PREVID=\"1\" NEXTID=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTUAL=\"1\" ISACTIVE=\"1\" />",
+    "model": "House"
+  },
+  {
+    "kind": "AS_HOUSE_TYPES",
+    "xml": "<HOUSETYPE ID=\"1\" NAME=\"1\" SHORTNAME=\"1\" DESC=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"true\" />",
+    "model": "HouseType"
+  },
+  {
+    "kind": "AS_MUN_HIERARCHY",
+    "xml": "<ITEM ID=\"1\" OBJECTID=\"1\" PARENTOBJID=\"1\" CHANGEID=\"1\" OKTMO=\"12345678\" PREVID=\"1\" NEXTID=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"1\" PATH=\"1.2\" />",
+    "model": "MunHierarchyItem"
+  },
+  {
+    "kind": "AS_NORMATIVE_DOCS",
+    "xml": "<NORMDOC ID=\"1\" NAME=\"1\" DATE=\"2024-11-23\" NUMBER=\"1\" TYPE=\"1\" KIND=\"1\" UPDATEDATE=\"2024-11-23\" ORGNAME=\"1\" REGNUM=\"1\" REGDATE=\"2024-11-23\" ACCDATE=\"2024-11-23\" COMMENT=\"1\" />",
+    "model": "NormativeDoc"
+  },
+  {
+    "kind": "AS_NORMATIVE_DOCS_KINDS",
+    "xml": "<NDOCKIND ID=\"1\" NAME=\"1\" />",
+    "model": "NormativeDocKind"
+  },
+  {
+    "kind": "AS_NORMATIVE_DOCS_TYPES",
+    "xml": "<NDOCTYPE ID=\"1\" NAME=\"1\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" />",
+    "model": "NormativeDocType"
+  },
+  {
+    "kind": "AS_OBJECT_LEVELS",
+    "xml": "<OBJECTLEVEL LEVEL=\"1\" NAME=\"1\" SHORTNAME=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"true\" />",
+    "model": "ObjectLevel"
+  },
+  {
+    "kind": "AS_OPERATION_TYPES",
+    "xml": "<OPERATIONTYPE ID=\"1\" NAME=\"1\" SHORTNAME=\"1\" DESC=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"true\" />",
+    "model": "OperationType"
+  },
+  {
+    "kind": "AS_PARAM",
+    "xml": "<PARAM ID=\"1\" OBJECTID=\"1\" CHANGEID=\"1\" CHANGEIDEND=\"1\" TYPEID=\"1\" VALUE=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" />",
+    "model": "Param"
+  },
+  {
+    "kind": "AS_PARAM_TYPES",
+    "xml": "<PARAMTYPE ID=\"1\" NAME=\"1\" CODE=\"1\" DESC=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"true\" />",
+    "model": "ParamType"
+  },
+  {
+    "kind": "AS_REESTR_OBJECTS",
+    "xml": "<OBJECT OBJECTID=\"1\" CREATEDATE=\"2024-11-23\" CHANGEID=\"1\" LEVELID=\"1\" UPDATEDATE=\"2024-11-23\" OBJECTGUID=\"ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e\" ISACTIVE=\"1\" />",
+    "model": "ReestrObject"
+  },
+  {
+    "kind": "AS_ROOMS",
+    "xml": "<ROOM ID=\"1\" OBJECTID=\"1\" OBJECTGUID=\"ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e\" CHANGEID=\"1\" NUMBER=\"1\" ROOMTYPE=\"1\" OPERTYPEID=\"1\" PREVID=\"1\" NEXTID=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTUAL=\"1\" ISACTIVE=\"1\" />",
+    "model": "Room"
+  },
+  {
+    "kind": "AS_ROOM_TYPES",
+    "xml": "<ROOMTYPE ID=\"1\" NAME=\"1\" SHORTNAME=\"1\" DESC=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"true\" />",
+    "model": "RoomType"
+  },
+  {
+    "kind": "AS_STEADS",
+    "xml": "<STEAD ID=\"1\" OBJECTID=\"1\" OBJECTGUID=\"ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e\" CHANGEID=\"1\" NUMBER=\"1\" OPERTYPEID=\"1\" PREVID=\"1\" NEXTID=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTUAL=\"1\" ISACTIVE=\"1\" />",
+    "model": "Stead"
+  },
+  {
+    "kind": "AS_ADDHOUSE_TYPES",
+    "xml": "<HOUSETYPE ID=\"1\" NAME=\"1\" SHORTNAME=\"1\" DESC=\"1\" UPDATEDATE=\"2024-11-23\" STARTDATE=\"2024-11-23\" ENDDATE=\"2024-11-23\" ISACTIVE=\"true\" />",
+    "model": "AddHouseType"
+  }
+]

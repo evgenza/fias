@@ -1,39 +1,25 @@
-// Команда gar-importer — загрузчик файловой выгрузки ГАР (ФИАС) в PostgreSQL.
-//
-// Подготовительный этап: описаны модели всех 22 форматов выгрузки
-// (internal/model), схема базы (migrations) и разбор имён файлов
-// (internal/garxml). Далее — потоковое чтение XML из zip-архива
-// и массовая загрузка в PostgreSQL.
+// Команда gar-importer — хранение выгрузки ГАР через Ent и подготовка к поиску.
+// Вся логика команд находится в internal/cli: main только подключает сигналы
+// и задаёт коды завершения.
 package main
 
 import (
-	"fmt"
+	"context"
+	"errors"
 	"os"
+	"os/signal"
+	"syscall"
+
+	"gar-importer/internal/cli"
 )
 
-const usage = `gar-importer — загрузчик выгрузки ГАР (ФИАС) в PostgreSQL
-
-Использование:
-  gar-importer <команда> [аргументы]
-
-Команды:
-  version  — версия сборки
-  import   — разбор zip-архива выгрузки и загрузка в PostgreSQL (в разработке)
-`
-
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usage)
-		os.Exit(2)
-	}
-	switch os.Args[1] {
-	case "version":
-		fmt.Println("gar-importer dev")
-	case "import":
-		fmt.Fprintln(os.Stderr, "import: ещё не реализовано — этап потокового парсера XML и загрузчика PostgreSQL")
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := cli.Run(ctx, os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		if errors.Is(err, cli.ErrUsage) {
+			os.Exit(2)
+		}
 		os.Exit(1)
-	default:
-		fmt.Fprint(os.Stderr, usage)
-		os.Exit(2)
 	}
 }
