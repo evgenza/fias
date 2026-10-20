@@ -1,131 +1,227 @@
-# gar-importer
+# GAR Address Platform
 
-Хранение файловой выгрузки [ГАР (ФИАС)](https://fias.nalog.ru/Frontend)
-в PostgreSQL через [Ent](https://entgo.io/) и подготовка данных для адресного
-поиска в OpenSearch или другом поисковом движке.
+Микросервисная платформа адресного поиска по данным [ГАР (ФИАС)](https://fias.nalog.ru/Frontend):
+импорт XML-выгрузки из распределённого хранилища в PostgreSQL через брокер сообщений,
+построение поискового индекса в Elasticsearch, публичный REST API (HTTP/2, Swagger)
+и gRPC API подсказок (unary + стриминг), веб-клиент, логи в Elastic, бизнес-метрики
+в Prometheus, трейсы в Jaeger.
 
-Документация форматов — соседняя папка `../` (XSD-схемы: `../unpacked/xsd`,
-описания полей: `../02 Форматы`, правила построения адресной строки:
-`../01 Руководства/Формирование адресной строки.md`).
+Репозиторий вырос из `gar-importer` — потокового импортёра выгрузки ГАР в PostgreSQL
+(см. раздел «Импортёр ГАР» ниже; подробности форматов и модели данных — в `docs/`).
 
-## Структура
+## Архитектура
 
 ```
-cmd/gar-importer    — entrypoint: сигналы и коды выхода; логика в internal/cli
-cmd/gar-gen-spec    — генерация спецификаций атрибутов из закреплённых XSD
-cmd/gar-gen-records — генерация независимых записей из моделей Ent
-ent/schema          — исходные схемы 23 поддерживаемых типов файлов ГАР
-ent/template        — генерация адаптеров records → пакетные операции Ent
-ent/                — генерируемые модели, CRUD, запросы, транзакции и upsert
-internal/cli        — разбор флагов, вывод, коды завершения (тестируемый Run)
-internal/config     — env/.env, настройки пула соединений, маскирование DSN
-internal/control    — журнал импорта (gar_control): запуски, файлы,
-                      checkpoint, блокировка записи dataset
-internal/gartype    — Date, Flag, Integer: XML/JSON и SQL-представление
-internal/gar        — каталог форматов: Kind, имена файлов, регионы,
-                      спецификации атрибутов (из xsd/), план архива
-internal/gar/record — независимые типизированные записи ГАР и потоковый
-                      декодер с валидацией; не зависит от ORM
-internal/garxml     — потоковое декодирование XML-документа по записям
-internal/importjob  — сценарий импорта: план, фильтры, пакетирование,
-                      прогресс, отчёт (порты Archive и Writer)
-internal/input/zipgar — источник: инвентаризация ZIP, открытие XML
-internal/storage    — Ent-клиент, пул pgx, миграции и пакетный writer
-migrations/         — SQL-план первоначальной миграции, сгенерированный Ent
-xsd/                — закреплённые копии исходных XSD ФИАС (22 файла)
-docs/               — каталог форматов, базовый анализ, журнал рефакторинга
-compose.yaml        — PostgreSQL 18.6 Alpine с постоянным томом и healthcheck
+                        ┌────────────────────────────────────────────────────┐
+                        │                     MinIO (S3)                     │
+                        │            ZIP-архивы выгрузки ГАР                 │
+                        └───────────────────────┬────────────────────────────┘
+  make seed-fixture /                         │ скачивание архива
+  seed-demo.sh публикует                      ▼
+  gar.import.requested ──▶ NATS ──▶ ┌──────────────────┐    upsert пакетами
+                      JetStream     │     importer     │ ──▶ PostgreSQL (Ent,
+                      (durable)     │  (gar-importer   │     схема gar,
+                                    │   worker, Go)    │     журнал gar_control)
+                                    └────────┬─────────┘
+                                             │ события gar.objects.changed
+                                             ▼
+                                    ┌──────────────────┐    bulk-индексация
+                                    │     indexer      │ ──▶ Elasticsearch
+                                    │       (Go)       │     (gar-addresses)
+                                    └──────────────────┘            ▲
+                                          читает gar.*              │
+┌───────────┐    REST (HTTP/1.1 + HTTP/2)   ┌──────────────┐        │
+│  Браузер  │ ────────────────────────────▶ │ address-api  │        │
+│ веб-клиент│                               │    (Go)      │        │
+└───────────┘                               └──┬────────┬──┘        │
+                                               │        │ gRPC      │
+                                               │        ▼           │
+                                               │   ┌──────────────┐ │
+                                               │   │  suggester   │─┘
+                                               │   │  (Go, unary  │  запросы
+                                               │   │ + streaming) │
+                                               │   └──────────────┘
+                                               ▼
+                                          Redis (кэш карточек)
+
+Наблюдаемость: все сервисы пишут JSON-логи (slog) → Filebeat → Elasticsearch → Kibana;
+метрики Prometheus (/metrics) → Grafana (дашборды как код); трейсы OTLP → Jaeger.
 ```
 
-Источник полей и XML/JSON-тегов — `ent/schema` (StructTag). Из них
-`cmd/gar-gen-records` генерирует независимые записи `internal/gar/record`
-(без зависимости от ORM): они используются потоковым декодером и адаптерами
-записи, а Ent-модели остаются представлением хранения. Тест соответствия
-не даёт записям и моделям разъехаться.
+## Требования
 
-## Запуск PostgreSQL и миграция
+- Docker с Docker Compose (стек занимает ~5–6 ГБ RAM; рекомендуется ≥8 ГБ,
+  выделенных Docker).
+- Для разработки и демо-фикстуры: Go 1.27.1+.
+- Для полного демо с реальными данными: файл полной выгрузки `gar_xml.zip`
+  (скачивается с сайта ФИАС, ~57 ГБ).
 
-Нужны Go 1.27.1+ и Docker Compose. Если `.env` ещё не создан:
+## Быстрый старт
 
 ```sh
-cp .env.example .env
+cp .env.example .env        # дефолты годятся для локального запуска
+make up                     # сборка образов и подъём всего стека
+make seed-fixture           # демо-данные: синтетическая фикстура (сотни записей, ~1 мин)
 ```
 
-В `.env` задаются `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,
-`POSTGRES_PORT` и соответствующий `DATABASE_URL`. Значения по умолчанию —
-база и пользователь `gar`, порт `5432`. Локальный `.env` исключён из Git.
-При подготовке проекта создан `.env` со случайным паролем.
+Открыть:
+
+- **Веб-клиент**: http://localhost:8080 — поиск с автодополнением, карточка адреса.
+- **Swagger UI**: http://localhost:8080/swagger/ — спецификация `api/openapi/address-api.yaml`.
+- **Grafana**: http://localhost:3000 (admin / см. `.env`) — дашборды «GAR Platform — …».
+- **Kibana**: http://localhost:5601 — data view `gar-logs-*` создаётся автоматически.
+- **Jaeger**: http://localhost:16686 — сквозные трейсы REST → gRPC → ES.
+- **Prometheus**: http://localhost:9090 — targets всех сервисов и экспортёров.
+
+Проверка без ручных шагов: `make smoke-seed` — генерирует фикстуру, прогоняет
+конвейер MinIO → NATS → PostgreSQL → Elasticsearch и проверяет все точки входа.
+
+### Демо на реальных данных (регион 77 — Москва)
+
+```sh
+make seed-demo   # соберёт build/gar-demo.zip из ~/Downloads/gar_xml.zip и поставит задачу импорта
+```
+
+`scripts/make-demo-zip.sh` извлекает из полного архива только корневые справочники
+и каталог региона (по central directory, без распаковки 57 ГБ целиком).
+Импорт региона занимает десятки минут; прогресс: `docker compose logs -f importer indexer`,
+наполнение индекса: `curl -s localhost:9200/gar-addresses/_count | jq .count`.
+
+## Сервисы
+
+| Сервис | Исходники | Назначение | Порты (localhost) |
+|---|---|---|---|
+| `importer` | `cmd/gar-importer` + `internal/worker` | импорт ZIP из MinIO → PostgreSQL, события в NATS | 9211 (metrics/health) |
+| `indexer` | `services/indexer` | события NATS → сборка адресов из gar.* → bulk в Elasticsearch | 9212 |
+| `suggester` | `services/suggester` + `proto/suggest/v1` | gRPC: `GetAddress`, `Suggest`, `StreamSuggestions` (стриминг) | 50051, 9213 |
+| `address-api` | `services/address-api` | REST API + HTTP/2 + Swagger UI + веб-клиент, кэш Redis | 8080 |
+
+Инфраструктура: PostgreSQL 18, Elasticsearch 8.15, Kibana, Filebeat,
+NATS JetStream, MinIO, Redis 7, Prometheus, Grafana, Jaeger + экспортёры
+метрик (postgres, redis, elasticsearch, nats, minio).
+
+## API
+
+### REST (HTTP/1.1 и HTTP/2 на одном порту 8080)
+
+```sh
+curl --http2-prior-knowledge 'http://localhost:8080/api/v1/suggest?q=тверская&limit=5' | jq
+curl -s http://localhost:8080/api/v1/addresses/201 | jq          # карточка (X-Cache: miss→hit)
+curl -s http://localhost:8080/api/v1/addresses/103/children | jq # дети по иерархии
+```
+
+Спецификация — `api/openapi/address-api.yaml`, UI — `/swagger/`.
+
+### gRPC (порт 50051, reflection включён)
+
+```sh
+grpcurl -plaintext localhost:50051 list                                  # список сервисов
+grpcurl -plaintext -d '{"query":"твер","limit":3}' \
+  localhost:50051 suggest.v1.Suggester/StreamSuggestions                 # server-streaming
+grpcurl -plaintext -d '{"object_id":"201"}' \
+  localhost:50051 suggest.v1.Suggester/GetAddress                        # unary
+```
+
+## Соответствие требованиям
+
+| Требование | Где реализовано |
+|---|---|
+| ≥3 микросервиса в исходниках на Go | `importer`, `indexer`, `suggester`, `address-api` (4) |
+| Запуск в Docker | `compose.yaml`, `make up`; сборка из исходников (`build:` секции) |
+| Самоинициализация БД | миграции при старте `importer` и one-shot `migrate`; индекс ES создаёт `indexer`; бакет — `minio-init`; data view — `kibana-init` |
+| Интеграционные тесты | testcontainers (NATS/MinIO/PostgreSQL/Elasticsearch/Redis): `make test-integration`; e2e `scripts/smoke.sh --with-seed` |
+| HTTP/2, REST API | `address-api` (unencrypted HTTP/2 + HTTP/1.1 на :8080) |
+| Swagger API | `api/openapi/address-api.yaml` + завендоренный Swagger UI на `/swagger/` |
+| gRPC: запросы и стриминг | `proto/suggest/v1/suggest.proto`: unary `GetAddress`/`Suggest`, server-streaming `StreamSuggestions` |
+| Реляционная БД и NoSQL | PostgreSQL (Ent/Atlas) + Elasticsearch (поиск) + Redis (кэш) |
+| Брокер сообщений | NATS JetStream (stream GAR, durable consumers, ack/nak/term, redelivery) |
+| Логи в Elastic | slog JSON → Filebeat (autodiscover) → `gar-logs-*` → Kibana |
+| Бизнес-метрики в Prometheus | `gar_import_*`, `indexer_*`, `address_api_*`, `grpc_*` на `/metrics` всех сервисов |
+| Распределённое хранилище | MinIO (S3): архивы ГАР, бакет `gar-archives` |
+| ★ Дашборды | Grafana provisioning: `deploy/grafana/dashboards/json/` (Основной, Сервисы, Инфраструктура); Kibana data view |
+| ★ Телеметрия | OpenTelemetry → Jaeger, сквозные трейсы REST→gRPC→ES |
+| ★ Веб-клиент | `services/address-api/static/web/` (vanilla JS, embed) |
+| ★ Метрики БД/брокера/кэша | экспортёры в compose + часть на главном дашборде «GAR Platform — Основной» |
+| ★★ Нагрузочное тестирование | `tests/load/` (k6), отчёт `docs/report/load-testing.md` |
+| ★★ Отказоустойчивость | `scripts/chaos/`, отчёт `docs/report/fault-tolerance.md` |
+
+Отчёты: `docs/report/` — `architecture.md`, `demo.md`, `load-testing.md`,
+`fault-tolerance.md` (со скриншотами в `docs/report/img/`).
+
+## Разработка
+
+```sh
+make build            # go build ./...
+make test             # юнит-тесты
+make test-integration # интеграционные (нужен Docker; testcontainers)
+make vet              # go vet (оба набора тегов)
+make proto            # регенерация gRPC-кода из proto/suggest/v1 (buf как go tool)
+```
+
+Линтер: `golangci-lint run` (конфиг `.golangci.yml`, v2; 0 issues).
+
+CI: `.github/workflows/ci.yml` — три job'а: lint+unit+build, интеграционные
+тесты (testcontainers), compose-smoke (подъём стека, засев фикстурой, smoke).
+Все этапы должны быть зелёными без предупреждений.
+
+### Структура репозитория
+
+```
+cmd/gar-importer     — CLI: migrate, import (локальный ZIP), worker, request-import
+cmd/gar-gen-spec     — генерация спецификаций атрибутов из закреплённых XSD
+cmd/gar-gen-records  — генерация независимых записей из моделей Ent
+cmd/gar-mkfixture    — генерация маленькой валидной фикстуры ZIP (CI, демо)
+cmd/gar-migrate-diff — генерация следующей миграции сравнением с dev-базой
+ent/schema           — схемы 23 типов файлов ГАР; ent/ — сгенерированный код
+internal/cli         — разбор флагов команд, коды завершения
+internal/config      — env/.env, пул соединений, маскирование DSN
+internal/control     — журнал импорта gar_control: запуски, файлы, checkpoint
+internal/gar         — каталог форматов, план архива, валидация по XSD-спекам
+internal/gar/record  — независимые типизированные записи и потоковый декодер
+internal/garxml      — потоковое декодирование XML по записям
+internal/gartype     — Date, Flag, Integer: XML/JSON и SQL-представление
+internal/importjob   — сценарий импорта (порты Archive/Writer/Journal, события)
+internal/input/zipgar — источник: инвентаризация ZIP, открытие XML
+internal/storage     — Ent-клиент, пул pgx, пакетный writer
+internal/migrations  — версионированные Atlas-миграции (up/down, advisory lock)
+internal/platform    — slog JSON, Prometheus-реестр, OTel, HTTP health, graceful
+internal/events      — NATS JetStream: ImportRequested/ObjectsChanged, pub/sub
+internal/objectstorage — MinIO/S3: скачивание архива, OpenArchive
+internal/search      — Elasticsearch: документ, индекс gar-addresses, bulk
+internal/address     — сборка полного адреса из gar.* (PATH, типы, справочники)
+internal/worker      — фоновый исполнитель задач импорта (NATS → MinIO → PG)
+services/indexer     — потребитель gar.objects.changed → Elasticsearch
+services/suggester   — gRPC подсказки (unary + server-streaming)
+services/address-api — REST/HTTP2/Swagger/веб-клиент, кэш Redis
+proto/suggest/v1     — контракт gRPC + сгенерированный код (go generate ./proto/...)
+api/openapi          — спецификация REST API
+deploy/              — prometheus.yml, filebeat.yml, grafana, kibana-init
+scripts/             — seed-demo.sh, make-demo-zip.sh, smoke.sh, chaos/
+tests/load           — k6-сценарии и результаты прогонов
+docs/                — форматы, решения, отчёты (docs/report)
+migrations/          — Atlas-история схемы gar, legacy-baseline
+xsd/                 — закреплённые XSD ФИАС
+```
+
+## Импортёр ГАР (CLI)
+
+CLI остаётся самостоятельным инструментом: `migrate`, `import` (локальный ZIP),
+`worker` (задачи из NATS), `request-import` (постановка задачи).
 
 ```sh
 docker compose up -d --wait postgres
 go run ./cmd/gar-importer migrate
+go run ./cmd/gar-importer import --zip "$HOME/Downloads/gar_xml.zip" --regions 77
 ```
 
-Сервис слушает `127.0.0.1:5432`. Данные находятся в Docker-томе
-`gar-importer_postgres_data`, подключённом к `/var/lib/postgresql` для PostgreSQL 18.
-Переменная `DATABASE_URL` из окружения имеет приоритет над `.env`.
+Ключевые свойства: потоковое чтение ZIP без распаковки на диск; пакетная запись
+через `CreateBulk`+upsert (повторный импорт обновляет записи); журнал `gar_control`
+с checkpoint на файл и возобновлением `--resume`; валидация записей по XSD-спекам
+до записи; UTF-8 и Windows-1251. Модели и особенности типов — в таблице
+«Модели ↔ форматы» ниже и в `docs/baseline.md`.
 
-## Версионированные миграции
-
-Схема хранится как версионированная история в формате Atlas: каталог
-`migrations/atlas` (файлы `NNN_имя.up.sql` / `.down.sql` + контрольные суммы
-`atlas.sum`). Команда `migrate` применяет ожидающие версии по одной в отдельной
-транзакции вместе с записью в реестр ревизий (`gar_control.atlas_schema_revisions`)
-под advisory-блокировкой: параллельный запуск ждёт и не дублирует работу.
-
-```sh
-go run ./cmd/gar-importer migrate            # применить ожидающие версии
-go run ./cmd/gar-importer migrate --plan     # только показать ожидающие (не меняет базу)
-```
-
-Новая миграция схемы генерируется сравнением с одноразовой dev-базой
-(целевая база не участвует и не изменяется):
-
-```sh
-# 1) применить текущий каталог к пустой dev-базе
-psql "$DEV_URL" -c "CREATE SCHEMA gar"
-go run ./cmd/gar-importer migrate  # на dev-базе через DATABASE_URL
-# 2) сгенерировать следующий файл по отличию dev-базы от ent/schema
-go run ./cmd/gar-migrate-diff -name add_new_format -dev-url "$DEV_URL"
-```
-
-`ent/schema` — источник желаемого состояния; ранняя история файлов не
-редактируется задним числом. Проверка состояния существующей (legacy) базы
-и оформление baseline: `migrate --baseline` — база проверяется по
-фактическому содержимому против метаданных Ent; слепая пометка невозможна.
-Процедура перехода заполненной legacy-базы: `migrations/legacy/README.md`.
-
-## Генерация и работа с Ent
-
-После изменения `ent/schema`:
-
-```sh
-go generate ./ent
-go run ./cmd/gar-importer migrate
-```
-
-Генератор Ent закреплён в `go.mod` как Go tool. Зависимость `x/tools`
-обновлена для совместимости генератора с Go 1.27.
-
-```go
-database, err := storage.Open(ctx, os.Getenv("DATABASE_URL"))
-if err != nil {
-    return err
-}
-defer database.Close()
-
-objects, err := database.Client.AddrObj.Query().
-    Where(addrobj.ObjectIDEQ(162142236)).All(ctx)
-```
-
-Для записи доступны генерируемые `Create`, `CreateBulk`, `Update`, `Delete`,
-`OnConflict` и транзакции. Первичные ключи берутся из ГАР и не генерируются
-PostgreSQL. Исключение — внутренний ключ `Param.ID`: исходный ID хранится в
-`SourceID`, а уникальность задаётся парой `(source, source_id)` для раздельных
-файлов параметров. Ссылки между форматами остаются числовыми полями без внешних ключей:
-это сохраняет возможность загружать файлы в любом порядке.
-
-## Модели ↔ форматы
+<details>
+<summary>Модели ↔ форматы (23 формата ГАР)</summary>
 
 | Формат | Ent-модель | Таблица |
 |---|---|---|
@@ -153,143 +249,14 @@ PostgreSQL. Исключение — внутренний ключ `Param.ID`: �
 | `AS_NORMATIVE_DOCS_KINDS` | `ent.NormativeDocKind` | `gar.normative_doc_kinds` |
 | `AS_NORMATIVE_DOCS_TYPES` | `ent.NormativeDocType` | `gar.normative_doc_types` |
 
-Особенности моделей:
+Особенности: идентификаторы `xs:long` — `int64`/`bigint`; GUID — `uuid`;
+неограниченные `xs:integer` — `record.Integer` (каноническая строка, `numeric`);
+`record.Date` — календарная дата XSD без перевода в UTC; `record.Flag` читает
+`"1"/"0"` и `"true"/"false"`; ссылки между форматами — числовые поля без внешних
+ключей (файлы можно грузить в любом порядке).
 
-- `ADROBJECTID` и `OBJECTGUID` — строки GUID; числовые идентификаторы с
-  типом `xs:long` — `int64` / PostgreSQL `bigint`. GUID хранятся как `uuid`.
-- Ограниченные `xs:integer` до 10 цифр — `int64`, независимо от архитектуры
-  Go. Поля с 19 цифрами в `AS_STEADS` и неограниченные `xs:integer` —
-  `record.Integer`, каноническая десятичная строка без потери цифр.
-  В PostgreSQL это `numeric(19,0)` для участков и `numeric` для остальных
-  полей с неограниченным диапазоном.
-  Для арифметики доступен `Integer.Int64()` с явной ошибкой переполнения.
-- `ADDR_OBJ.LEVEL` и `STEADS.OPERTYPEID` — строки, как в XSD;
-  ведущие нули сохраняются. Коды регионов и ОКТМО также остаются строками.
-- `record.Date` — строковая календарная дата `xs:date`. При чтении допускаются
-  `Z` и смещение часового пояса; сохраняется исходный календарный день без
-  перевода в UTC. Поддерживаются отрицательные и расширенные годы XSD 1.0.
-  `Date.Time()` возвращает `(time.Time, error)` для годов 1..9999.
-  В PostgreSQL используется `date`; допустимый диапазон ограничен самим PostgreSQL.
-- `record.Flag` читает `"1"/"0"` и `"true"/"false"`; JSON содержит boolean.
-- Необязательные атрибуты XSD — указатели. В JSON незаданные поля опускаются.
-- JSON-поля имеют имена `snake_case`; идентификаторы передаются строками,
-  чтобы сохранить точность при передаче через JSON и хранении как `keyword`.
-  Это представление исходных записей, а не готовый поисковый документ.
-- Ent называет любой первичный ключ `ID`: у `ReestrObject.ID` это атрибут
-  XML `OBJECTID` и SQL `object_id`, у `ChangeHistory.ID` — `CHANGEID` / `change_id`,
-  у `ObjectLevel.ID` — `LEVEL` / `level`. Имена XML/JSON и столбцов сохранены.
-- `Param.SourceID` содержит XML `ID`; `Param.Source` — нормализованный
-  префикс файла (`AS_ADDR_OBJ_PARAMS`, `AS_HOUSES_PARAMS` и т. д.).
-  Суффиксы `PARAM` и `PARAMS` поддерживаются. Все шесть семейств параметров
-  хранятся в `gar.param` без пересечения их идентификаторов.
-- Документация описывает 22 формата. В реальном ZIP дополнительно есть
-  `AS_ADDHOUSE_TYPES`, использующий структуру `HOUSETYPES/HOUSETYPE`.
-  Дополнительные типы домов хранятся отдельно от `AS_HOUSE_TYPES`.
+</details>
 
-## Локальный импорт ZIP
-
-```sh
-go run ./cmd/gar-importer import --zip "$HOME/Downloads/gar_xml.zip"
-```
-
-Продолжение прерванного запуска (по digest архива; завершённые файлы
-пропускаются, незавершённый файл продолжается с подтверждённого checkpoint):
-
-```sh
-go run ./cmd/gar-importer import --zip "$HOME/Downloads/gar_xml.zip" --resume
-```
-
-Пробный запуск по 200 записей каждого XML-файла:
-
-```sh
-go run ./cmd/gar-importer import --zip "$HOME/Downloads/gar_xml.zip" \
-  --limit-per-file 200 --batch-size 200
-```
-
-Выбор регионов и форматов:
-
-```sh
-go run ./cmd/gar-importer import --zip "$HOME/Downloads/gar_xml.zip" \
-  --regions 77,50 --formats AS_HOUSES,AS_ADDR_OBJ --batch-size 1000
-```
-
-`--regions` включает также общероссийские справочники из корня архива.
-`--formats AS_PARAM` выбирает файлы параметров всех шести типов объектов;
-`--formats AS_HOUSES_PARAMS` — только параметры домов (точное семейство).
-Поддерживаются обёртки `gar_xml/` и `gar_delta_xml/` первым сегментом пути.
-Без фильтров и `--limit-per-file` читаются все поддерживаемые XML целиком.
-Пакет по умолчанию — 1000 записей, допустимый размер — 1..2000.
-
-Программный метод: сценарий отделён от Ent и ZIP через порты.
-
-```go
-archive, _ := zipgar.Open(zipPath)
-database, _ := storage.Open(ctx, cfg)
-report, err := importjob.Run(ctx, archive, database, importjob.Options{
-    BatchSize:    1000,
-    Regions:      []int{77},
-    LimitPerFile: 200, // 0 для полного импорта
-})
-```
-
-Сценарий читает ZIP без распаковки на диск и декодирует XML по одной записи.
-Память зависит от размера пакета. Поддерживаются UTF-8 и Windows-1251.
-Генерируемые адаптеры из `ent/template` строят Ent-builders из типизированных
-записей без reflection на каждой записи. Подсчёт счётчиков не увеличивается
-до успешного коммита пакета; `записано` — дедуплицированные операции записи.
-
-Пакеты сохраняются через `CreateBulk` и upsert. Повторный импорт обновляет
-записи, включая очистку исчезнувших необязательных значений до SQL NULL.
-При повторении ID в одном пакете сохраняется последняя запись.
-Счётчик `записано` показывает обработанные операции записи, включая обновления.
-
-При ошибке или Ctrl+C уже сохранённые пакеты остаются в БД; неполный
-текущий пакет не записывается. Можно повторить запуск с теми же параметрами.
-Ошибка включает имя файла, номер записи и позицию XML. Записи проверяются
-по спецификациям из закреплённых XSD до записи: пропущенный обязательный
-атрибут, пустая дата, неверная длина или неизвестный атрибут прерывают
-импорт с указанием атрибута и формата.
-
-Не поддерживаемые файлы всегда перечисляются как пропущенные с причиной:
-неизвестный формат, повреждённое имя известного формата, неожиданная папка
-(не регион и не корень), голый `AS_PARAM` без семейства объектов, повторный
-путь в архиве. Файлы без расширения XML игнорируются. Режим с лимитом читает
-только начало каждого XML; при полном чтении проверяется также CRC ZIP.
-
-## Подготовка к поиску
-
-Дальнейший этап — сборка полного адреса по `PATH` и отправка документов пакетами
-Bulk в поисковый движок. Для актуального поиска учитываются `ISACTUAL` и `ISACTIVE`.
-
-При чтении XML записи проверяются по спецификациям из `xsd/` (см.
-`internal/gar`): обязательность и ограничения атрибутов заданы закреплёнными
-XSD ФИАС, спецификации генерируются `cmd/gar-gen-spec`.
-
-JSON идентификаторов следует отображать в `keyword`, признаки — в `boolean`,
-обычные календарные даты — в `date`, поля адресного поиска — в `text`.
-Для отрицательных/расширенных лет потребуется отдельное отображение в целевой
-движок: способность XML-модели прочитать значение не означает, что любой
-движок поддерживает его в своём типе даты. Модели и разбор файлов не зависят
-от конкретного поискового движка.
-
-Структура PostgreSQL не определяет структуру поискового индекса.
-Методы `Scan/Value` пользовательских типов используются Ent через `database/sql`.
-
-## Сборка
-
-```sh
-go build ./...
-go test ./...
-go vet ./...
-```
-
-Интеграционные тесты запускаются отдельно на пустой тестовой базе, заданной
-через `GAR_TEST_DATABASE_URL` (никогда не обычный `DATABASE_URL`). Проверяются
-все модели, длинные числа, GUID, SQL NULL, повторный импорт ZIP, фильтры,
-отмена и ошибочный XML. Тесты пишут реальные данные: перед запуском сбрасывают
-схему `gar`, поэтому пакеты прогоняются последовательно (`-p 1`). Если
-переменная не задана, эти тесты пропускаются:
-
-```sh
-go test -tags=integration -p 1 ./internal/... -v
-```
+Документация форматов ГАР — соседняя папка `../../` (XSD: `../../unpacked/xsd`,
+описания полей: `../../02 Форматы`, правила адресной строки:
+`../../01 Руководства/Формирование адресной строки.md`).

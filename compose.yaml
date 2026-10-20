@@ -205,6 +205,8 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
     volumes:
       - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
@@ -222,6 +224,14 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  # Рендеринг дашбордов в PNG (отчёты, /render/* API).
+  renderer:
+    image: grafana/grafana-image-renderer:v5.12.7
+    restart: unless-stopped
+    environment:
+      ENABLE_METRICS: "false"
+      LOG_LEVEL: warn
 
   jaeger:
     image: jaegertracing/all-in-one:1.60
