@@ -94,6 +94,22 @@ func TestSuggesterEndToEnd(t *testing.T) {
 		}
 	})
 
+	for _, tc := range []struct{ query, id string }{
+		{"тверская 7", "1002"}, {"г москва", "1001"},
+		{"краснопресненская", "1007"}, {"ёлочная", "1008"}, {"елочная", "1008"},
+		{"оченьдлинноеназваниеулицы", "1009"}, {"к с", "1010"},
+	} {
+		t.Run("address tokens "+tc.query, func(t *testing.T) {
+			resp, err := client.Suggest(ctx, &suggestv1.SuggestRequest{Query: tc.query})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !containsID(resp.Addresses, tc.id) {
+				t.Fatalf("query %q: missing %s in %v", tc.query, tc.id, ids(resp.Addresses))
+			}
+		})
+	}
+
 	t.Run("Suggest фильтр по региону", func(t *testing.T) {
 		resp, err := client.Suggest(ctx, &suggestv1.SuggestRequest{Query: "твер", Region: "69"})
 		if err != nil {
@@ -237,6 +253,13 @@ func seedIndex(t *testing.T, ctx context.Context, client *search.Client) {
 			FullAddress: "г Тверь, ул Советская, д 3", Name: "3", TypeName: "д", Region: "69", Level: 10,
 			IsActual: true, IsActive: true, IndexedAt: now},
 	}
+	for _, item := range []struct{ id, address string }{
+		{"1007", "г Москва, ул Краснопресненская"}, {"1008", "г Москва, ул Ёлочная"},
+		{"1009", "г Москва, ул Оченьдлинноеназваниеулицы"}, {"1010", "г Москва, к 2, с 3"},
+	} {
+		docs = append(docs, search.Document{ObjectID: item.id, FullAddress: item.address, Region: "77", Kind: search.KindAddrObj, IsActual: true, IsActive: true, IndexedAt: now})
+	}
+
 	indexed, err := client.BulkIndex(ctx, docs)
 	if err != nil {
 		t.Fatal(err)

@@ -87,6 +87,10 @@ make seed-demo   # соберёт build/gar-demo.zip из ~/Downloads/gar_xml.zi
 Импорт региона занимает десятки минут; прогресс: `docker compose logs -f importer indexer`,
 наполнение индекса: `curl -s localhost:9200/gar-addresses/_count | jq .count`.
 
+После обновления с физического индекса `gar-addresses` выполните
+[миграцию поискового индекса v2](docs/search-index-migration.md) при остановленном
+indexer. Новая установка создаёт write alias автоматически.
+
 ## Сервисы
 
 | Сервис | Исходники | Назначение | Порты (localhost) |

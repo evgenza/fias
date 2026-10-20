@@ -300,7 +300,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Готово, когда:** интеграционный тест «переименовали улицу дельтой → документ
   дома в ES с новым названием»; у домов после первичного импорта правильный `level`.
 
-### [ ] C4. Маппинг ES не находит короткие и длинные токены — High
+### [x] C4. Маппинг ES не находит короткие и длинные токены — High
 - **Файлы:** `internal/search/search.go` (~245–268),
   `services/suggester/internal/server/server.go` (~172–173).
 - **Проблема:**
@@ -644,3 +644,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | B2 | [x] | Auto-resume failed/canceled/loading/planned; worker fallback, selection validation, loading status under lock, removed SchemaName. Ctrl-C/resume same ID and skip-complete regressions; build/vet/lint/unit/integration passed. |
 
 | 2026-10-20 | C1 | [x] | Mutex-protected immutable dictionaries, no empty cache, 1 minute TTL and invalidation on type events. Empty/import/TTL/invalidation and parallel DescribeObject tests pass under race detector; build/vet/lint/unit/integration passed. |
+
+| 2026-10-20 | C4 | [x] | Address analyzers: ngram 1..20, query truncate, yo normalization, no stopwords. Versioned write alias + require_alias; explicit offline reindex/verification/atomic swap command and recovery docs. Search regressions, migration/failure/retry tests, build/vet/lint/unit/integration passed. |

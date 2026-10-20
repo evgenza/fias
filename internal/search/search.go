@@ -122,37 +122,6 @@ func (c *Client) Ping(ctx context.Context) error {
 	return nil
 }
 
-// EnsureIndex создаёт индекс с маппингом документов, если он отсутствует;
-// существующий индекс считается актуальным (ошибка resource_already_exists
-// трактуется как успех).
-func (c *Client) EnsureIndex(ctx context.Context) error {
-	exists, err := c.es.Indices.Exists([]string{c.index}, c.es.Indices.Exists.WithContext(ctx))
-	if err != nil {
-		return fmt.Errorf("search: проверка индекса %s: %w", c.index, err)
-	}
-	if exists.StatusCode == 200 {
-		exists.Body.Close()
-		return nil
-	}
-	exists.Body.Close()
-	resp, err := c.es.Indices.Create(c.index,
-		c.es.Indices.Create.WithContext(ctx),
-		c.es.Indices.Create.WithBody(strings.NewReader(indexMapping)),
-	)
-	if err != nil {
-		return fmt.Errorf("search: создание индекса %s: %w", c.index, err)
-	}
-	defer resp.Body.Close()
-	if resp.IsError() {
-		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode == 400 && strings.Contains(string(body), "resource_already_exists_exception") {
-			return nil
-		}
-		return fmt.Errorf("search: создание индекса %s: %s: %s", c.index, resp.Status(), strings.TrimSpace(string(body)))
-	}
-	return nil
-}
-
 // BulkIndex индексирует пакет документов (действие index, _id = object_id).
 // Возвращает число успешно проиндексированных документов; при частичных
 // ошибках элементов возвращается ошибка с описанием первых из них.
@@ -170,7 +139,7 @@ func (c *Client) BulkIndex(ctx context.Context, docs []Document) (int, error) {
 			return 0, fmt.Errorf("search: кодирование документа %s: %w", doc.ObjectID, err)
 		}
 	}
-	resp, err := c.es.Bulk(&buf, c.es.Bulk.WithContext(ctx))
+	resp, err := c.es.Bulk(&buf, c.es.Bulk.WithContext(ctx), c.es.Bulk.WithRequireAlias(true))
 	if err != nil {
 		return 0, fmt.Errorf("search: bulk-запрос: %w", err)
 	}
@@ -237,43 +206,49 @@ func (c *Client) Count(ctx context.Context) (int64, error) {
 }
 
 // indexMapping — маппинг индекса gar-addresses (контракт с suggester):
-// full_address — text (russian) с подполями prefix (edge_ngram 2..15)
-// и keyword; name — text (russian) с подполем keyword.
+// full_address/name preserve address tokens without stopwords, normalize ё/е;
+// prefix uses edge n-grams 1..20 and truncates query tokens to 20.
 const indexMapping = `{
   "settings": {
     "number_of_shards": 1,
     "number_of_replicas": 0,
-    "max_ngram_diff": 13,
+    "max_ngram_diff": 19,
     "analysis": {
+      "char_filter": {"address_yo": {"type": "mapping", "mappings": ["ё => е", "Ё => Е"]}},
       "filter": {
+        "address_truncate": {"type": "truncate", "length": 20},
         "address_edge_ngram": {
           "type": "edge_ngram",
-          "min_gram": 2,
-          "max_gram": 15
+          "min_gram": 1,
+          "max_gram": 20
         }
       },
       "analyzer": {
+        "address_text": {"type": "custom", "tokenizer": "standard", "char_filter": ["address_yo"], "filter": ["lowercase"]},
         "address_prefix": {
           "type": "custom",
           "tokenizer": "standard",
+          "char_filter": ["address_yo"],
           "filter": ["lowercase", "address_edge_ngram"]
         },
         "address_prefix_search": {
           "type": "custom",
           "tokenizer": "standard",
-          "filter": ["lowercase"]
+          "char_filter": ["address_yo"],
+          "filter": ["lowercase", "address_truncate"]
         }
       }
     }
   },
   "mappings": {
+    "_meta": {"gar_mapping_version": 2},
     "properties": {
       "object_id": {"type": "keyword"},
       "object_guid": {"type": "keyword"},
       "kind": {"type": "keyword"},
       "full_address": {
         "type": "text",
-        "analyzer": "russian",
+        "analyzer": "address_text",
         "fields": {
           "prefix": {
             "type": "text",
@@ -285,7 +260,7 @@ const indexMapping = `{
       },
       "name": {
         "type": "text",
-        "analyzer": "russian",
+        "analyzer": "address_text",
         "fields": {
           "keyword": {"type": "keyword"}
         }
