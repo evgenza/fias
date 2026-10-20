@@ -15,10 +15,12 @@ import (
 	"testing"
 	"time"
 
+	"gar-importer/ent"
 	"gar-importer/ent/param"
 	"gar-importer/internal/config"
 	"gar-importer/internal/control"
 	"gar-importer/internal/gar"
+	"gar-importer/internal/gar/record"
 	"gar-importer/internal/importjob"
 	"gar-importer/internal/input/zipgar"
 	"gar-importer/internal/migrations"
@@ -206,16 +208,15 @@ func TestJournalResumeAndLock(t *testing.T) {
 	}
 	archivePath := makeZIP(t, []archiveFile{{"77/AS_HOUSES_20261006_1.xml", document(gar.KindHouses, strings.Join(records, ""))}})
 
-	// Запуск прерывается после первого коммита (batch=2): отмена срабатывает
-	// с задержкой, чтобы коммит успел зафиксироваться (имитация смерти процесса
-	// между пакетами, а не внутри транзакции).
+	// Прерываем после четырёх коммитов: callback обязан идти после COMMIT,
+	// поэтому синхронная отмена не откатывает уже подтверждённый пакет.
 	runCtx, stop := context.WithCancel(ctx)
 	options := importjob.Options{BatchSize: 2, Regions: []int{77}}
 	var stopOnce bool
 	options.Progress = func(stats importjob.FileStats) {
-		if stats.CommittedInput >= 2 && !stopOnce {
+		if stats.CommittedInput >= 8 && !stopOnce {
 			stopOnce = true
-			time.AfterFunc(1*time.Millisecond, stop)
+			stop()
 		}
 	}
 	report, err := importjob.RunWithJournal(runCtx, mustOpen(t, archivePath), factory, journal, options)
@@ -239,8 +240,12 @@ func TestJournalResumeAndLock(t *testing.T) {
 		`SELECT last_committed_record FROM gar_control.import_files WHERE run_id = $1`, runID).Scan(&lastCommitted); err != nil {
 		t.Fatal(err)
 	}
-	if lastCommitted == 0 {
-		t.Fatal("checkpoint not recorded atomically with data")
+	var persisted int64
+	if err := db.SQL().QueryRowContext(ctx, `SELECT count(*) FROM gar.houses`).Scan(&persisted); err != nil {
+		t.Fatal(err)
+	}
+	if lastCommitted < 8 || lastCommitted != persisted {
+		t.Fatalf("checkpoint=%d persisted=%d; expected cumulative committed records", lastCommitted, persisted)
 	}
 
 	// Подмена архива (тот же путь, другой digest) отвергается.
@@ -257,6 +262,9 @@ func TestJournalResumeAndLock(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if resumeReport.Written != int64(len(records))-lastCommitted {
+		t.Fatalf("resume wrote %d, expected %d", resumeReport.Written, int64(len(records))-lastCommitted)
 	}
 	if !resumeReport.Files[0].Resumed {
 		t.Fatalf("expected resumed file: %+v", resumeReport.Files[0])
@@ -347,4 +355,39 @@ func mustOpen(t *testing.T, path string) *zipgar.Archive {
 		t.Fatal(err)
 	}
 	return archive
+}
+
+func TestBatchCountersOnlyAfterCommit(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t, ctx)
+	resetSchema(t, ctx, db)
+	// Deferred constraint fails only at COMMIT, after bulk and checkpoint succeeded.
+	_, err := db.Exec(ctx, `CREATE FUNCTION gar.reject_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'reject commit'; END $$;
+ CREATE CONSTRAINT TRIGGER reject_commit AFTER INSERT ON gar.houses DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION gar.reject_commit()`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, err := ent.NewGARBatch(db.Client, gar.KindHouses, "", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	callbacks := 0
+	batch.SetOnCommit(func(int64, int64) { callbacks++ })
+	_, err = record.DecodeStream(ctx, strings.NewReader(document(gar.KindHouses, houseRecord(1))), gar.KindHouses, 0, batch)
+	if err == nil {
+		t.Fatal("expected deferred commit failure")
+	}
+	if batch.Committed() != 0 || batch.WriteOps() != 0 || callbacks != 0 || batch.Len() != 1 {
+		t.Fatalf("failed commit advanced state: committed=%d writes=%d callbacks=%d pending=%d", batch.Committed(), batch.WriteOps(), callbacks, batch.Len())
+	}
+	if _, err := db.Exec(ctx, `DROP TRIGGER reject_commit ON gar.houses`); err != nil {
+		t.Fatal(err)
+	}
+	if err := batch.Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if batch.Committed() != 1 || batch.WriteOps() != 1 || callbacks != 1 || batch.Len() != 0 {
+		t.Fatal("pending batch was not recovered after failed commit")
+	}
+
 }

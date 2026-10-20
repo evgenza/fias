@@ -80,11 +80,11 @@ func (f *WriterFactory) BeginFile(ctx context.Context, entry gar.Entry, batchSiz
 	}
 	if f.journal != nil && fileID > 0 {
 		if setter, ok := batch.(interface {
-			SetCheckpoint(func(ctx context.Context, drv dialect.Driver, received int64) error)
+			SetCheckpoint(func(ctx context.Context, drv dialect.Driver, committedInput int64) error)
 		}); ok {
 			journal, base := f.journal, baseCommitted
-			setter.SetCheckpoint(func(ctx context.Context, drv dialect.Driver, received int64) error {
-				return journal.CommitFile(ctx, dialectExec{drv}, fileID, base+received, base+received)
+			setter.SetCheckpoint(func(ctx context.Context, drv dialect.Driver, committedInput int64) error {
+				return journal.CommitFile(ctx, dialectExec{drv}, fileID, base+committedInput, base+committedInput)
 			})
 		}
 	}

@@ -265,6 +265,15 @@ func (b *garAddHouseTypeBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -292,18 +301,9 @@ func (b *garAddHouseTypeBatch) saveOnce(ctx context.Context, client *Client) err
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -415,6 +415,15 @@ func (b *garAddrObjBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -456,18 +465,9 @@ func (b *garAddrObjBatch) saveOnce(ctx context.Context, client *Client) error {
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -557,6 +557,15 @@ func (b *garAddrObjDivisionBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -576,18 +585,9 @@ func (b *garAddrObjDivisionBatch) saveOnce(ctx context.Context, client *Client) 
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -687,6 +687,15 @@ func (b *garAddrObjTypeBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -716,18 +725,9 @@ func (b *garAddrObjTypeBatch) saveOnce(ctx context.Context, client *Client) erro
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -843,6 +843,15 @@ func (b *garAdmHierarchyItemBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -888,18 +897,9 @@ func (b *garAdmHierarchyItemBatch) saveOnce(ctx context.Context, client *Client)
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -1009,6 +1009,15 @@ func (b *garApartmentBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -1048,18 +1057,9 @@ func (b *garApartmentBatch) saveOnce(ctx context.Context, client *Client) error 
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -1157,6 +1157,15 @@ func (b *garApartmentTypeBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -1184,18 +1193,9 @@ func (b *garApartmentTypeBatch) saveOnce(ctx context.Context, client *Client) er
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -1303,6 +1303,15 @@ func (b *garCarplaceBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -1340,18 +1349,9 @@ func (b *garCarplaceBatch) saveOnce(ctx context.Context, client *Client) error {
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -1445,6 +1445,15 @@ func (b *garChangeHistoryBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -1468,18 +1477,9 @@ func (b *garChangeHistoryBatch) saveOnce(ctx context.Context, client *Client) er
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -1597,6 +1597,15 @@ func (b *garHouseBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -1644,18 +1653,9 @@ func (b *garHouseBatch) saveOnce(ctx context.Context, client *Client) error {
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -1753,6 +1753,15 @@ func (b *garHouseTypeBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -1780,18 +1789,9 @@ func (b *garHouseTypeBatch) saveOnce(ctx context.Context, client *Client) error 
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -1897,6 +1897,15 @@ func (b *garMunHierarchyItemBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -1932,18 +1941,9 @@ func (b *garMunHierarchyItemBatch) saveOnce(ctx context.Context, client *Client)
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -2049,6 +2049,15 @@ func (b *garNormativeDocBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -2084,18 +2093,9 @@ func (b *garNormativeDocBatch) saveOnce(ctx context.Context, client *Client) err
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -2181,6 +2181,15 @@ func (b *garNormativeDocKindBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -2196,18 +2205,9 @@ func (b *garNormativeDocKindBatch) saveOnce(ctx context.Context, client *Client)
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -2297,6 +2297,15 @@ func (b *garNormativeDocTypeBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -2316,18 +2325,9 @@ func (b *garNormativeDocTypeBatch) saveOnce(ctx context.Context, client *Client)
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -2423,6 +2423,15 @@ func (b *garObjectLevelBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -2448,18 +2457,9 @@ func (b *garObjectLevelBatch) saveOnce(ctx context.Context, client *Client) erro
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -2557,6 +2557,15 @@ func (b *garOperationTypeBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -2584,18 +2593,9 @@ func (b *garOperationTypeBatch) saveOnce(ctx context.Context, client *Client) er
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -2699,6 +2699,15 @@ func (b *garParamBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -2732,18 +2741,9 @@ func (b *garParamBatch) saveOnce(ctx context.Context, client *Client) error {
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -2841,6 +2841,15 @@ func (b *garParamTypeBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -2868,18 +2877,9 @@ func (b *garParamTypeBatch) saveOnce(ctx context.Context, client *Client) error 
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -2975,6 +2975,15 @@ func (b *garReestrObjectBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -3000,18 +3009,9 @@ func (b *garReestrObjectBatch) saveOnce(ctx context.Context, client *Client) err
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -3121,6 +3121,15 @@ func (b *garRoomBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -3160,18 +3169,9 @@ func (b *garRoomBatch) saveOnce(ctx context.Context, client *Client) error {
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -3269,6 +3269,15 @@ func (b *garRoomTypeBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -3296,18 +3305,9 @@ func (b *garRoomTypeBatch) saveOnce(ctx context.Context, client *Client) error {
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err
@@ -3415,6 +3415,15 @@ func (b *garSteadBatch) Save(ctx context.Context) error {
 		return err
 	}
 	committed = true
+	b.committed += b.received
+	b.writeOps += int64(len(b.builders))
+	b.received = 0
+	clear(b.builders)
+	b.builders = b.builders[:0]
+	clear(b.positions)
+	if b.onCommit != nil {
+		b.onCommit(b.committed, b.writeOps)
+	}
 	return nil
 }
 
@@ -3452,18 +3461,9 @@ func (b *garSteadBatch) saveOnce(ctx context.Context, client *Client) error {
 		// Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
 		// откатывает пакет, счётчики не продвигаются.
 		if b.checkpoint != nil {
-			if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil {
+			if err := b.checkpoint(ctx, client.config.driver, b.committed+b.received); err != nil {
 				return err
 			}
-		}
-		b.committed += b.received
-		b.writeOps += int64(len(b.builders))
-		b.received = 0
-		clear(b.builders)
-		b.builders = b.builders[:0]
-		clear(b.positions)
-		if b.onCommit != nil {
-			b.onCommit(b.committed, b.writeOps)
 		}
 	}
 	return err

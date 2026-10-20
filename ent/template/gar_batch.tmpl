@@ -124,6 +124,15 @@ func (b *gar{{ $n.Name }}Batch) Save(ctx context.Context) error {
     if err := b.saveOnce(ctx, tx.Client()); err != nil { return err }
     if err := tx.Commit(); err != nil { return err }
     committed = true
+    b.committed += b.received
+    b.writeOps += int64(len(b.builders))
+    b.received = 0
+    clear(b.builders)
+    b.builders = b.builders[:0]
+    clear(b.positions)
+    if b.onCommit != nil {
+        b.onCommit(b.committed, b.writeOps)
+    }
     return nil
 }
 
@@ -139,16 +148,7 @@ func (b *gar{{ $n.Name }}Batch) saveOnce(ctx context.Context, client *Client) er
         // Данные и checkpoint фиксируются одной транзакцией: сбой checkpoint
         // откатывает пакет, счётчики не продвигаются.
         if b.checkpoint != nil {
-            if err := b.checkpoint(ctx, client.config.driver, b.received); err != nil { return err }
-        }
-        b.committed += b.received
-        b.writeOps += int64(len(b.builders))
-        b.received = 0
-        clear(b.builders)
-        b.builders = b.builders[:0]
-        clear(b.positions)
-        if b.onCommit != nil {
-            b.onCommit(b.committed, b.writeOps)
+            if err := b.checkpoint(ctx, client.config.driver, b.committed + b.received); err != nil { return err }
         }
     }
     return err

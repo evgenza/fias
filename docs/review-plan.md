@@ -125,7 +125,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 
 ## B. Импортёр
 
-### [ ] B1. Checkpoint пишет размер пакета вместо накопленного счётчика — High
+### [x] B1. Checkpoint пишет размер пакета вместо накопленного счётчика — High
 - **Файлы:** `ent/template/gar_batch.tmpl` (~139–152) → `go generate ./ent`;
   `internal/storage/postgres.go` (~80–92); `internal/control/control.go`
   (~208–211); тест `internal/importjob/zip_test.go` (~240).
@@ -638,3 +638,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | A1 | [x] | NATS-тест подтвердил AckWait=BackOff[0]; явные 30 с, heartbeat 15 с, Fetch(1) с ожиданием Ack/Nak/Term, миграция durable. Обработчик 35 с без повторов; build, vet, lint, unit и integration прошли. |
 
 | 2026-10-20 | A2 | [x] | DLQ перед Term, исходные байты/причина/доставки, логи и gar_events_terminated_total; прикладной лимит 10, сервер unlimited для восстановления после отказа DLQ. Поток 30 суток/10 GiB/DiscardNew; DeliverAll сохранён для восстановления индекса. Build/vet/lint/unit/integration прошли. |
+
+| 2026-10-20 | B1 | [x] | Checkpoint накопительный; счётчики/callback/очистка пакета после COMMIT, decoded bigint с обновлением существующей таблицы. Ent регенерирован. Регрессии на четырёх пакетах, точном resume и deferred COMMIT failure; build/vet/lint/unit/integration с отдельной PostgreSQL прошли. |
