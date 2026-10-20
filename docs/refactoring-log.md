@@ -267,3 +267,7 @@ GAR ограничен 30 сутками и 10 GiB; DiscardNew отклоняе�
 ## Волна 1 / B1 (2026-10-20)
 
 Checkpoint получает committed+received (адаптер добавляет base при resume). Ent-шаблон увеличивает счётчики, очищает builders и вызывает onCommit только после успешного tx.Commit; сгенерирован go generate ./ent. При отказе COMMIT пакет остаётся доступен повторному Save, счётчики и callback не продвигаются. decoded переведён в bigint, существующая служебная таблица обновляется при Open. Тест с deferred constraint воспроизвёл ложный прогресс до исправления; после четырёх пакетов checkpoint совпадает с числом строк, resume пишет ровно остаток. Все проверки прошли с отдельной PostgreSQL.
+
+## Wave 1 / B2 (2026-10-20)
+
+Worker uses ResumeRunID=-1 with ResumeOrNew=true. Resume validates digest, mode, Regions/Kinds/Sources and LimitPerFile as normalized sets; batch size may change. All unfinished states are eligible. Selection and status reset to loading run under the dataset lock, released after FinishRun. Incompatible resume is permanent. Removed unused Options.SchemaName: storage/Ent use gar. Cancellation/resume of the same run, completed-file skipping, filter validation and all required checks passed.

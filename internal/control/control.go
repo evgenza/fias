@@ -281,7 +281,7 @@ func (j *Journal) LatestResumableRun(ctx context.Context, digest string) (int64,
 	var runID int64
 	err := j.db.QueryRowContext(ctx,
 		fmt.Sprintf(`SELECT id FROM %s.import_runs
-			WHERE source_digest = $1 AND state IN ('loading', 'planned')
+			WHERE source_digest = $1 AND state IN ('failed', 'canceled', 'loading', 'planned')
 			ORDER BY id DESC LIMIT 1`, Schema),
 		digest).Scan(&runID)
 	if err == sql.ErrNoRows {
@@ -331,4 +331,17 @@ func (j *Journal) acquireDatasetLock(ctx context.Context, datasetID int64) (rele
 func datasetLockKey(datasetID int64) int64 {
 	// 0x6761725F00000000 | id — стабильный ключ пространства блокировок.
 	return int64(0x6761725F00000000) | datasetID
+}
+
+// RunOptions returns the original selection for resume validation.
+func (j *Journal) RunOptions(ctx context.Context, runID int64) (string, error) {
+	var options string
+	err := j.db.QueryRowContext(ctx, fmt.Sprintf(`SELECT options FROM %s.import_runs WHERE id = $1`, Schema), runID).Scan(&options)
+	return options, err
+}
+
+// ResumeRun resets the attempt status while preserving completed files and checkpoints.
+func (j *Journal) ResumeRun(ctx context.Context, runID int64) error {
+	_, err := j.db.ExecContext(ctx, fmt.Sprintf(`UPDATE %s.import_runs SET state = 'loading', finished_at = NULL, error = NULL WHERE id = $1`, Schema), runID)
+	return err
 }

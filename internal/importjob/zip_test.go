@@ -111,7 +111,7 @@ func TestZIPToAllTables(t *testing.T) {
 		archiveFile{"README.txt", "test archive"},
 		archiveFile{"AS_UNKNOWN_20261006_x.xml", "unsupported file is reported"})
 	archive := makeZIP(t, files)
-	options := importjob.Options{BatchSize: 2, Regions: []int{77}}
+	options := importjob.Options{BatchSize: 2, Regions: []int{77}, ResumeRunID: -1, ResumeOrNew: true}
 	for run := 1; run <= 2; run++ {
 		report, err := importjob.RunWithJournal(ctx, mustOpen(t, archive), factory, journal, options)
 		if err != nil {
@@ -211,7 +211,7 @@ func TestJournalResumeAndLock(t *testing.T) {
 	// Прерываем после четырёх коммитов: callback обязан идти после COMMIT,
 	// поэтому синхронная отмена не откатывает уже подтверждённый пакет.
 	runCtx, stop := context.WithCancel(ctx)
-	options := importjob.Options{BatchSize: 2, Regions: []int{77}}
+	options := importjob.Options{BatchSize: 2, Regions: []int{77}, ResumeRunID: -1, ResumeOrNew: true}
 	var stopOnce bool
 	options.Progress = func(stats importjob.FileStats) {
 		if stats.CommittedInput >= 8 && !stopOnce {
@@ -248,6 +248,24 @@ func TestJournalResumeAndLock(t *testing.T) {
 		t.Fatalf("checkpoint=%d persisted=%d; expected cumulative committed records", lastCommitted, persisted)
 	}
 
+	archive := mustOpen(t, archivePath)
+	digest, err := archive.Digest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, candidateState := range []string{"failed", "loading", "planned", "canceled"} {
+		if _, err := db.Exec(ctx, `UPDATE gar_control.import_runs SET state=$2 WHERE id=$1`, runID, candidateState); err != nil {
+			t.Fatal(err)
+		}
+		candidate, err := journal.LatestResumableRun(ctx, digest)
+		if err != nil || candidate != runID {
+			t.Fatalf("state %s: candidate=%d error=%v", candidateState, candidate, err)
+		}
+	}
+
 	// Подмена архива (тот же путь, другой digest) отвергается.
 	tampered := makeZIP(t, []archiveFile{{"77/AS_HOUSES_20261006_1.xml", document(gar.KindHouses, strings.Join(records[:4], ""))}})
 	if _, err := importjob.RunWithJournal(ctx, mustOpen(t, tampered), factory, journal, importjob.Options{
@@ -256,15 +274,28 @@ func TestJournalResumeAndLock(t *testing.T) {
 		t.Fatalf("tampered resume: %v", err)
 	}
 
+	// Параметры исходного запуска менять нельзя.
+	for _, changed := range []importjob.Options{
+		{BatchSize: 2, Regions: []int{50}, ResumeRunID: runID},
+		{BatchSize: 2, Regions: []int{77}, Kinds: []gar.Kind{gar.KindHouses}, ResumeRunID: runID},
+		{BatchSize: 2, Regions: []int{77}, Sources: []string{"AS_HOUSES_PARAMS"}, ResumeRunID: runID},
+	} {
+		if _, err := importjob.RunWithJournal(ctx, mustOpen(t, archivePath), factory, journal, changed); err == nil || !strings.Contains(err.Error(), "параметры") {
+			t.Fatalf("changed selection accepted: %+v: %v", changed, err)
+		}
+	}
 	// Возобновление тем же архивом: подтверждённые записи не пишутся второй раз.
 	resumeReport, err := importjob.RunWithJournal(ctx, mustOpen(t, archivePath), factory, journal, importjob.Options{
-		BatchSize: 2, Regions: []int{77}, ResumeRunID: runID,
+		BatchSize: 2, Regions: []int{77}, ResumeRunID: -1,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if resumeReport.Written != int64(len(records))-lastCommitted {
 		t.Fatalf("resume wrote %d, expected %d", resumeReport.Written, int64(len(records))-lastCommitted)
+	}
+	if resumeReport.RunID != runID {
+		t.Fatalf("resumed a different run: %d != %d", resumeReport.RunID, runID)
 	}
 	if !resumeReport.Files[0].Resumed {
 		t.Fatalf("expected resumed file: %+v", resumeReport.Files[0])

@@ -24,6 +24,7 @@ func TestIsPermanent(t *testing.T) {
 		name string
 		err  error
 	}{
+		{"resume mismatch", fmt.Errorf("wrapped: %w", importjob.ErrResumeMismatch)},
 		{"bad request", fmt.Errorf("обёртка: %w", errBadRequest)},
 		{"record error", &gar.RecordError{Kind: gar.KindHouses, Attribute: "OPERTYPEID", Cause: "не помещается в int64"}},
 		{"record error wrapped", fmt.Errorf("AS_HOUSES.xml: %w", &gar.RecordError{Kind: gar.KindHouses, Cause: "корень <FOO>"})},

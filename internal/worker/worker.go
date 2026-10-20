@@ -296,6 +296,8 @@ func (w *worker) runImport(ctx context.Context, request events.ImportRequested) 
 		storage.NewWriterFactory(w.database.Client, w.journal), w.journal,
 		importjob.Options{
 			BatchSize:       request.BatchSize,
+			ResumeRunID:     -1,
+			ResumeOrNew:     true,
 			LimitPerFile:    request.LimitPerFile,
 			Regions:         request.Regions,
 			OnFileCompleted: w.publishFileCompleted,
@@ -354,7 +356,7 @@ func (w *worker) publishFileCompleted(ctx context.Context, event importjob.FileC
 // XSD, битый XML или ZIP, отсутствующий объект/бакет S3, некорректные
 // параметры запроса) повторная доставка не исправит — сообщение терминируется.
 func isPermanent(err error) bool {
-	if errors.Is(err, errBadRequest) || errors.Is(err, importjob.ErrNoSelectedFiles) || errors.Is(err, io.ErrUnexpectedEOF) {
+	if errors.Is(err, importjob.ErrResumeMismatch) || errors.Is(err, errBadRequest) || errors.Is(err, importjob.ErrNoSelectedFiles) || errors.Is(err, io.ErrUnexpectedEOF) {
 		return true
 	}
 	var recordErr *gar.RecordError

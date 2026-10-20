@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"path"
 	"strings"
 	"time"
@@ -25,6 +26,8 @@ const (
 	// DefaultSchema — схема данных по умолчанию (legacy dataset).
 	DefaultSchema = "gar"
 )
+
+var ErrResumeMismatch = errors.New("возобновление отклонено")
 
 var ErrNoSelectedFiles = errors.New("в архиве нет выбранных XML-файлов ГАР")
 
@@ -79,6 +82,8 @@ type Journal interface {
 	StartFile(ctx context.Context, runID int64, entryPath string, entryIndex int, kind, source string, region int, entryDate, entrySequence string) (fileID, baseCommitted int64, err error)
 	CompleteFiles(ctx context.Context, runID int64) (map[string]int64, error)
 	RunSource(ctx context.Context, runID int64) (digest, mode string, err error)
+	RunOptions(ctx context.Context, runID int64) (string, error)
+	ResumeRun(ctx context.Context, runID int64) error
 	// LatestResumableRun возвращает последний незавершённый запуск с этим digest (0 — нет).
 	LatestResumableRun(ctx context.Context, digest string) (int64, error)
 	FinishFile(ctx context.Context, fileID, writeOps int64, integrityChecked bool, runErr error) error
@@ -94,7 +99,6 @@ type Options struct {
 	Kinds          []gar.Kind
 	Sources        []string // точные семейства параметров, например AS_HOUSES_PARAMS
 	Progress       func(FileStats)
-	SchemaName     string // dataset; пусто — DefaultSchema
 	ProgramVersion string
 	// OnFileCompleted — необязательный хук завершения файла (например, публикация
 	// события в шину). Вызывается после успешного коммита данных (writer.Save),
@@ -104,8 +108,10 @@ type Options struct {
 	OnFileCompleted func(ctx context.Context, event FileCompletedEvent) error
 	// ResumeRunID: >0 — продолжить указанный запуск; -1 — продолжить последний
 	// незавершённый с тем же digest; 0 — новый запуск. При resume проверяются
-	// digest и режим.
+	// digest, режим и параметры отбора.
 	ResumeRunID int64
+	// ResumeOrNew permits a fresh run when automatic resume has no candidate.
+	ResumeOrNew bool
 }
 
 // FileCompletedEvent — событие успешной обработки одного файла плана:
@@ -168,9 +174,6 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 	if err := ValidateOptions(options); err != nil {
 		return report, err
 	}
-	if options.SchemaName == "" {
-		options.SchemaName = DefaultSchema
-	}
 	filters, err := BuildFilters(options)
 	if err != nil {
 		return report, err
@@ -186,6 +189,10 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 		releaseLock func()
 	)
 	if journal != nil {
+		if releaseLock, err = journal.AcquireDataWriteLock(ctx, DefaultSchema); err != nil {
+			return report, err
+		}
+		defer releaseLock()
 		runID, err = beginRun(ctx, journal, source, digest, options)
 		if err != nil {
 			return report, err
@@ -194,15 +201,9 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 		if complete, err = journal.CompleteFiles(ctx, runID); err != nil {
 			return finishRunErr(ctx, journal, runID, report, err)
 		}
-		if releaseLock, err = journal.AcquireDataWriteLock(ctx, options.SchemaName); err != nil {
-			return finishRunErr(ctx, journal, runID, report, err)
-		}
 	}
 	var runErr error
 	defer func() {
-		if releaseLock != nil {
-			releaseLock()
-		}
 		if journal != nil {
 			state := RunStateReady
 			switch {
@@ -281,7 +282,7 @@ func beginRun(ctx context.Context, journal Journal, source Archive, digest strin
 		if err != nil {
 			return 0, err
 		}
-		if resumeID == 0 {
+		if resumeID == 0 && !options.ResumeOrNew {
 			return 0, fmt.Errorf("возобновление: нет незавершённого запуска с этим digest источника")
 		}
 		options.ResumeRunID = resumeID
@@ -292,10 +293,20 @@ func beginRun(ctx context.Context, journal Journal, source Archive, digest strin
 			return 0, err
 		}
 		if runDigest != digest {
-			return 0, fmt.Errorf("возобновление отклонено: изменился digest источника: в запуске %s, в архиве %s", runDigest, digest)
+			return 0, fmt.Errorf("%w: изменился digest источника: в запуске %s, в архиве %s", ErrResumeMismatch, runDigest, digest)
 		}
 		if runMode != mode {
-			return 0, fmt.Errorf("возобновление отклонено: изменился режим: в запуске %s, запрошен %s", runMode, mode)
+			return 0, fmt.Errorf("%w: изменился режим: в запуске %s, запрошен %s", ErrResumeMismatch, runMode, mode)
+		}
+		savedOptions, err := journal.RunOptions(ctx, options.ResumeRunID)
+		if err != nil {
+			return 0, err
+		}
+		if err := validateResumeOptions(savedOptions, options); err != nil {
+			return 0, err
+		}
+		if err := journal.ResumeRun(ctx, options.ResumeRunID); err != nil {
+			return 0, err
 		}
 		return options.ResumeRunID, nil
 	}
@@ -310,7 +321,7 @@ func beginRun(ctx context.Context, journal Journal, source Archive, digest strin
 	if programVersion == "" {
 		programVersion = "dev"
 	}
-	return journal.StartRun(ctx, options.SchemaName, mode, sourcePath(source), digest, programVersion, string(optionsJSON))
+	return journal.StartRun(ctx, DefaultSchema, mode, sourcePath(source), digest, programVersion, string(optionsJSON))
 }
 
 func sourcePath(source Archive) string {
@@ -449,4 +460,28 @@ func BuildFilters(options Options) (gar.Filters, error) {
 		filters.Sources[gar.Source(source)] = true
 	}
 	return filters, nil
+}
+
+func validateResumeOptions(saved string, requested Options) error {
+	var previous struct {
+		Regions      []int      `json:"regions"`
+		Kinds        []gar.Kind `json:"kinds"`
+		Sources      []string   `json:"sources"`
+		LimitPerFile int64      `json:"limit_per_file"`
+	}
+	if err := json.Unmarshal([]byte(saved), &previous); err != nil {
+		return fmt.Errorf("возобновление: параметры исходного запуска: %w", err)
+	}
+	oldFilters, err := BuildFilters(Options{Regions: previous.Regions, Kinds: previous.Kinds, Sources: previous.Sources})
+	if err != nil {
+		return err
+	}
+	newFilters, err := BuildFilters(requested)
+	if err != nil {
+		return err
+	}
+	if previous.LimitPerFile != requested.LimitPerFile || !maps.Equal(oldFilters.Regions, newFilters.Regions) || !maps.Equal(oldFilters.Kinds, newFilters.Kinds) || !maps.Equal(oldFilters.Sources, newFilters.Sources) {
+		return fmt.Errorf("%w: изменились параметры Regions/Kinds/Sources/LimitPerFile", ErrResumeMismatch)
+	}
+	return nil
 }

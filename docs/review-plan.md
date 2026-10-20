@@ -142,7 +142,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Готово, когда:** тест после N пакетов проверяет
   `last_committed_record == N*batch` и что resume пропускает ровно столько записей.
 
-### [ ] B2. Resume не находит прерванные запуски, worker никогда не возобновляет — High
+### [x] B2. Resume не находит прерванные запуски, worker никогда не возобновляет — High
 - **Файлы:** `internal/control/control.go` (`LatestResumableRun` ~274–285),
   `internal/importjob/job.go` (~204–216, 287–299), `internal/worker/worker.go` (~293–298).
 - **Проблема:**
@@ -640,3 +640,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | A2 | [x] | DLQ перед Term, исходные байты/причина/доставки, логи и gar_events_terminated_total; прикладной лимит 10, сервер unlimited для восстановления после отказа DLQ. Поток 30 суток/10 GiB/DiscardNew; DeliverAll сохранён для восстановления индекса. Build/vet/lint/unit/integration прошли. |
 
 | 2026-10-20 | B1 | [x] | Checkpoint накопительный; счётчики/callback/очистка пакета после COMMIT, decoded bigint с обновлением существующей таблицы. Ent регенерирован. Регрессии на четырёх пакетах, точном resume и deferred COMMIT failure; build/vet/lint/unit/integration с отдельной PostgreSQL прошли. |
+
+| 2026-10-20 | B2 | [x] | Auto-resume failed/canceled/loading/planned; worker fallback, selection validation, loading status under lock, removed SchemaName. Ctrl-C/resume same ID and skip-complete regressions; build/vet/lint/unit/integration passed. |
