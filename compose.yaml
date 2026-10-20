@@ -35,7 +35,7 @@ services:
     volumes:
       - es_data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s"]
+      test: ["CMD-SHELL", "curl -sf 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s'"]
       interval: 10s
       timeout: 5s
       retries: 30
