@@ -171,7 +171,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record %[2]s
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.%[2]s(ctx, record)
 		})

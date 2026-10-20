@@ -1,11 +1,16 @@
 package record
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+
+	"gar-importer/internal/gar"
 )
 
 // Примеры форматов проверены исходными XSD ФНС с помощью xmllint.
@@ -52,6 +57,32 @@ func TestAllFormatsXMLAndJSON(t *testing.T) {
 			restored := reflect.New(reflect.TypeOf(prototype)).Interface()
 			if err := json.Unmarshal(data, restored); err != nil || !reflect.DeepEqual(value, restored) {
 				t.Fatalf("JSON round trip changed %s: %v", c.Model, err)
+			}
+		})
+	}
+}
+
+func TestDecodeFailureIsRecordError(t *testing.T) {
+	data, err := os.ReadFile("testdata/records.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct{ Kind, XML string }
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cases {
+		t.Run(c.Kind, func(t *testing.T) {
+			kind := gar.Kind(c.Kind)
+			spec, ok := gar.Spec(kind)
+			if !ok {
+				t.Fatalf("unknown kind %s", kind)
+			}
+			src := "<" + spec.Root + ">" + strings.Replace(c.XML, "/>", ">", 1)
+			_, err := DecodeStream(context.Background(), strings.NewReader(src), kind, 0, nil)
+			var recordErr *gar.RecordError
+			if !errors.As(err, &recordErr) {
+				t.Fatalf("want RecordError, got %T: %v", err, err)
 			}
 		})
 	}

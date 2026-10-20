@@ -91,7 +91,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Готово, когда:** тест с постоянно падающим обработчиком видит сообщение в DLQ,
   в логе и в метрике.
 
-### [ ] A3. Детерминированные ошибки данных считаются временными — Medium
+### [x] A3. Детерминированные ошибки данных считаются временными — Medium
 - **Файлы:** `internal/worker/worker.go` (`isPermanent` ~352–375),
   `internal/gar/validate.go` (~129–138), генератор `cmd/gar-gen-spec`,
   `internal/garxml/stream.go` (~64, 70), `internal/importjob/job.go` (~265).
@@ -631,3 +631,4 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | E1 | [x] | Исправлен healthcheck Elasticsearch; изолированный контейнер без ES переходит в unhealthy, compose config валиден. |
 | 2026-10-20 | E2 | [x] | Smoke проверяет job и health одного target через jq; absent/down отвергаются, UP принимается, bash -n пройден. |
 | 2026-10-20 | E3 | [x] | Удалён .idea из индекса, добавлен ignore, пароли заменены change_me, DATABASE_URL использует POSTGRES_PORT; compose config валиден. |
+| 2026-10-20 | A3 | [x] | Ошибки данных больше не повторяются как временные; диапазоны int64 по Ent-моделям, XSD enum, UUID, RecordError при декодировании, sentinel пустого выбора, ZIP/flate/SQLSTATE 22 и 23. Регрессии воспроизведены до исправления; build, vet, lint, unit, integration и оба генератора -verify прошли. |

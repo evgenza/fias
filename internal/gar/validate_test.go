@@ -173,6 +173,10 @@ func TestValueRules(t *testing.T) {
 		{"bad oper type", withAttrValue(house, "OPERTYPEID", "12x"), "OPERTYPEID", "неверное значение xs:integer"},
 		{"empty oper type", withAttrValue(house, "OPERTYPEID", "  "), "OPERTYPEID", "пустое значение xs:integer"},
 		{"long overflow", withAttrValue(house, "CHANGEID", "99999999999999999999"), "CHANGEID", "не помещается в int64"},
+		{"isactual out of enum", withAttrValue(house, "ISACTUAL", "2"), "ISACTUAL", "не из перечисления"},
+		{"isactive negative", withAttrValue(house, "ISACTIVE", "-1"), "ISACTIVE", "не из перечисления"},
+		{"guid not uuid", withAttrValue(house, "OBJECTGUID", "zb08d8da-ca9c-4a36-953a-6f1ce0d5b28e"), "OBJECTGUID", "не UUID"},
+		{"guid wrong dashes", withAttrValue(house, "OBJECTGUID", "ab08d8da-ca9c4-a36-953a-6f1ce0d5b28e"), "OBJECTGUID", "не UUID"},
 		{"boolean via integer ok", withAttrValue(house, "ISACTIVE", "1"), "", ""},
 	}
 	for _, test := range cases {
@@ -215,6 +219,27 @@ func TestValueRules(t *testing.T) {
 	err := ValidateRecord(KindAddrObj, addrSpec, addrObj)
 	if err == nil || !strings.Contains(err.Error(), "LEVEL") || !strings.Contains(err.Error(), "не более 10") {
 		t.Fatalf("long LEVEL accepted: %v", err)
+	}
+}
+
+// Диапазон xs:integer проверяется по реальному Go-типу поля записи:
+// int64 (Room.OPERTYPEID) — отклоняется переполнение; gartype.Integer
+// (House.OPERTYPEID, numeric в БД) — допускает любую разрядность.
+func TestIntegerRangeByGoType(t *testing.T) {
+	room := recordElement(t, `<ROOM ID="1" OBJECTID="1" OBJECTGUID="ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e" CHANGEID="1" NUMBER="1" ROOMTYPE="1" OPERTYPEID="99999999999999999999" UPDATEDATE="2024-11-23" STARTDATE="2024-11-23" ENDDATE="2024-11-23" ISACTUAL="1" ISACTIVE="1"/>`)
+	roomSpec, _ := Spec(KindRooms)
+	err := ValidateRecord(KindRooms, roomSpec, room)
+	if err == nil || !strings.Contains(err.Error(), "OPERTYPEID") || !strings.Contains(err.Error(), "не помещается в int64") {
+		t.Fatalf("int64 overflow accepted: %v", err)
+	}
+	room = withAttrValue(room, "OPERTYPEID", "9223372036854775807")
+	if err := ValidateRecord(KindRooms, roomSpec, room); err != nil {
+		t.Fatalf("max int64 rejected: %v", err)
+	}
+	house := recordElement(t, `<HOUSE ID="1" OBJECTID="1" OBJECTGUID="ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e" CHANGEID="1" OPERTYPEID="99999999999999999999" UPDATEDATE="2024-11-23" STARTDATE="2024-11-23" ENDDATE="2024-11-23" ISACTUAL="1" ISACTIVE="1"/>`)
+	houseSpec, _ := Spec(KindHouses)
+	if err := ValidateRecord(KindHouses, houseSpec, house); err != nil {
+		t.Fatalf("numeric (gartype.Integer) overflow rejected: %v", err)
 	}
 }
 

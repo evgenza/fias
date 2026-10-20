@@ -61,13 +61,13 @@ func DecodeXML(ctx context.Context, reader io.Reader, kind gar.Kind, limit int64
 		case xml.StartElement:
 			if !opened {
 				if element.Name.Local != kind.RootElement() {
-					return result, fmt.Errorf("корень <%s>, ожидается <%s> для %s", element.Name.Local, kind.RootElement(), kind)
+					return result, &gar.RecordError{Kind: kind, Cause: fmt.Sprintf("корень <%s>, ожидается <%s>", element.Name.Local, kind.RootElement())}
 				}
 				opened = true
 				continue
 			}
 			if closed || element.Name.Local != kind.RecordElement() {
-				return result, fmt.Errorf("неожиданный элемент <%s> в %s на байте XML %d", element.Name.Local, kind, decoder.InputOffset())
+				return result, &gar.RecordError{Kind: kind, Cause: fmt.Sprintf("неожиданный элемент <%s> на байте XML %d", element.Name.Local, decoder.InputOffset())}
 			}
 			if err := consume(decoder, element); err != nil {
 				return result, fmt.Errorf("запись %d на байте XML %d: %w", result.Records+1, decoder.InputOffset(), err)

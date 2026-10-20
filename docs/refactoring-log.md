@@ -241,3 +241,7 @@ Smoke проверяет job и health одного target через jq; absent
 ## Волна 0 / E3 (2026-10-20)
 
 Удалён .idea из индекса, добавлен ignore, пароли заменены change_me, DATABASE_URL использует POSTGRES_PORT; compose config валиден.
+
+## Волна 0 / A3 (2026-10-20)
+
+Ошибки данных больше не повторяются как временные; диапазоны int64 по Ent-моделям, XSD enum, UUID, RecordError при декодировании, sentinel пустого выбора, ZIP/flate/SQLSTATE 22 и 23. Регрессии воспроизведены до исправления; build, vet, lint, unit, integration и оба генератора -verify прошли.

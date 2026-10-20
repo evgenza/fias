@@ -58,7 +58,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record AddrObj
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.AddrObj(ctx, record)
 		})
@@ -69,7 +69,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record AddrObjDivision
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.AddrObjDivision(ctx, record)
 		})
@@ -80,7 +80,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record AddrObjType
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.AddrObjType(ctx, record)
 		})
@@ -91,7 +91,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record AdmHierarchyItem
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.AdmHierarchyItem(ctx, record)
 		})
@@ -102,7 +102,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record Apartment
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.Apartment(ctx, record)
 		})
@@ -113,7 +113,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record ApartmentType
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.ApartmentType(ctx, record)
 		})
@@ -124,7 +124,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record Carplace
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.Carplace(ctx, record)
 		})
@@ -135,7 +135,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record ChangeHistory
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.ChangeHistory(ctx, record)
 		})
@@ -146,7 +146,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record House
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.House(ctx, record)
 		})
@@ -157,7 +157,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record HouseType
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.HouseType(ctx, record)
 		})
@@ -168,7 +168,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record AddHouseType
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.AddHouseType(ctx, record)
 		})
@@ -179,7 +179,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record MunHierarchyItem
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.MunHierarchyItem(ctx, record)
 		})
@@ -190,7 +190,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record NormativeDoc
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.NormativeDoc(ctx, record)
 		})
@@ -201,7 +201,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record NormativeDocKind
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.NormativeDocKind(ctx, record)
 		})
@@ -212,7 +212,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record NormativeDocType
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.NormativeDocType(ctx, record)
 		})
@@ -223,7 +223,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record ObjectLevel
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.ObjectLevel(ctx, record)
 		})
@@ -234,7 +234,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record OperationType
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.OperationType(ctx, record)
 		})
@@ -245,7 +245,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record Param
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.Param(ctx, record)
 		})
@@ -256,7 +256,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record ParamType
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.ParamType(ctx, record)
 		})
@@ -267,7 +267,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record ReestrObject
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.ReestrObject(ctx, record)
 		})
@@ -278,7 +278,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record Room
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.Room(ctx, record)
 		})
@@ -289,7 +289,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record RoomType
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.RoomType(ctx, record)
 		})
@@ -300,7 +300,7 @@ func DecodeStream(ctx context.Context, reader io.Reader, kind gar.Kind, limit in
 			}
 			var record Stead
 			if err := decoder.DecodeElement(&record, &start); err != nil {
-				return err
+				return &gar.RecordError{Kind: kind, Cause: err.Error()}
 			}
 			return handler.Stead(ctx, record)
 		})

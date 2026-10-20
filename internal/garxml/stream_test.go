@@ -41,6 +41,19 @@ func TestDecodeXML(t *testing.T) {
 	}
 }
 
+// Неверный корневой элемент и чужая запись — детерминированные ошибки данных:
+// они возвращаются как gar.RecordError, чтобы воркер терминировал задачу.
+func TestStructuralErrorsAreRecordErrors(t *testing.T) {
+	consume := func(dec *xml.Decoder, start xml.StartElement) error { return dec.Skip() }
+	for _, src := range []string{"<ROOMS/>", "<HOUSES><ROOM/></HOUSES>"} {
+		_, err := DecodeXML(context.Background(), strings.NewReader(src), gar.KindHouses, 0, consume)
+		var recordErr *gar.RecordError
+		if !errors.As(err, &recordErr) {
+			t.Errorf("%q: error %T %v is not RecordError", src, err, err)
+		}
+	}
+}
+
 func TestDecodeWindows1251(t *testing.T) {
 	src, err := charmap.Windows1251.NewEncoder().String(`<?xml version="1.0" encoding="windows-1251"?><HOUSES><HOUSE HOUSENUM="Корпус 1"/></HOUSES>`)
 	if err != nil {

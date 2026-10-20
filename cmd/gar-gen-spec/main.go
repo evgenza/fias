@@ -16,11 +16,64 @@ import (
 	"go/format"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
+
+	"gar-importer/ent"
 )
 
 const addHouseTypes = "AS_ADDHOUSE_TYPES" // отдельного XSD нет: используется XSD AS_HOUSE_TYPES
+
+// models связывает семейство формата с Ent-моделью хранения: реальный Go-тип
+// поля определяет, требуется ли проверка диапазона int64 для xs:integer.
+var models = map[string]any{
+	"AS_ADDR_OBJ":             ent.AddrObj{},
+	"AS_ADDR_OBJ_DIVISION":    ent.AddrObjDivision{},
+	"AS_ADDR_OBJ_TYPES":       ent.AddrObjType{},
+	"AS_ADM_HIERARCHY":        ent.AdmHierarchyItem{},
+	"AS_APARTMENTS":           ent.Apartment{},
+	"AS_APARTMENT_TYPES":      ent.ApartmentType{},
+	"AS_CARPLACES":            ent.Carplace{},
+	"AS_CHANGE_HISTORY":       ent.ChangeHistory{},
+	"AS_HOUSES":               ent.House{},
+	"AS_HOUSE_TYPES":          ent.HouseType{},
+	"AS_ADDHOUSE_TYPES":       ent.AddHouseType{},
+	"AS_MUN_HIERARCHY":        ent.MunHierarchyItem{},
+	"AS_NORMATIVE_DOCS":       ent.NormativeDoc{},
+	"AS_NORMATIVE_DOCS_KINDS": ent.NormativeDocKind{},
+	"AS_NORMATIVE_DOCS_TYPES": ent.NormativeDocType{},
+	"AS_OBJECT_LEVELS":        ent.ObjectLevel{},
+	"AS_OPERATION_TYPES":      ent.OperationType{},
+	"AS_PARAM":                ent.Param{},
+	"AS_PARAM_TYPES":          ent.ParamType{},
+	"AS_REESTR_OBJECTS":       ent.ReestrObject{},
+	"AS_ROOMS":                ent.Room{},
+	"AS_ROOM_TYPES":           ent.RoomType{},
+	"AS_STEADS":               ent.Stead{},
+}
+
+// int64Attrs возвращает множество XML-атрибутов модели, чей Go-тип — int64.
+func int64Attrs(model any) map[string]bool {
+	attrs := map[string]bool{}
+	typ := reflect.TypeOf(model)
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		tag := field.Tag.Get("xml")
+		name, _, _ := strings.Cut(tag, ",")
+		if name == "" || name == "-" || !strings.Contains(tag, "attr") {
+			continue
+		}
+		fieldType := field.Type
+		if fieldType.Kind() == reflect.Pointer {
+			fieldType = fieldType.Elem()
+		}
+		if fieldType.Kind() == reflect.Int64 {
+			attrs[name] = true
+		}
+	}
+	return attrs
+}
 
 func main() {
 	xsdDir := flag.String("xsd", "xsd", "каталог с закреплёнными XSD")
@@ -70,15 +123,15 @@ func (n *node) child(local string) *node {
 
 func (n *node) local() string { return n.xmlName.Local }
 
-// restriction возвращает ограничения простого типа: базу и длины.
-func (n *node) restriction() (base string, minLen, maxLen, length int, ok bool) {
+// restriction возвращает ограничения простого типа: базу, длины и перечисление.
+func (n *node) restriction() (base string, minLen, maxLen, length int, enum []string, ok bool) {
 	simple := n.child("simpleType")
 	if simple == nil {
-		return "", 0, 0, 0, false
+		return "", 0, 0, 0, nil, false
 	}
 	rest := simple.child("restriction")
 	if rest == nil {
-		return "", 0, 0, 0, false
+		return "", 0, 0, 0, nil, false
 	}
 	for _, attr := range rest.attrs {
 		if attr.Name.Local == "base" {
@@ -87,8 +140,10 @@ func (n *node) restriction() (base string, minLen, maxLen, length int, ok bool) 
 	}
 	for _, facet := range rest.children {
 		value := 0
+		raw := ""
 		for _, attr := range facet.attrs {
 			if attr.Name.Local == "value" {
+				raw = attr.Value
 				// В валидных XSD value — целое; при мусоре оставляем 0.
 				_, _ = fmt.Sscanf(attr.Value, "%d", &value)
 			}
@@ -100,9 +155,11 @@ func (n *node) restriction() (base string, minLen, maxLen, length int, ok bool) 
 			maxLen = value
 		case "length":
 			length = value
+		case "enumeration":
+			enum = append(enum, raw)
 		}
 	}
-	return base, minLen, maxLen, length, true
+	return base, minLen, maxLen, length, enum, true
 }
 
 // parseTree строит дерево XML из потока токенов (текст игнорируется).
@@ -299,25 +356,46 @@ func specLiteral(f xsdFile) (string, error) {
 	if complex == nil {
 		return "", fmt.Errorf("%s: у записи %s нет complexType", f.family, f.record.name)
 	}
+	model, ok := models[f.family]
+	if !ok {
+		return "", fmt.Errorf("%s: нет Ent-модели в таблице models генератора", f.family)
+	}
+	int64Fields := int64Attrs(model)
 	var b strings.Builder
 	fmt.Fprintf(&b, "{Root: %q, Record: %q, Fields: []FieldSpec{", f.root.name, f.record.name)
 	for _, attr := range complex.children {
 		if attr.local() != "attribute" {
 			continue
 		}
-		kind, minLen, maxLen, length, required, err := fieldSpecOf(attr)
+		spec, err := fieldSpecOf(attr, int64Fields[attr.name])
 		if err != nil {
 			return "", fmt.Errorf("%s: attribute %s: %w", f.family, attr.name, err)
 		}
-		fmt.Fprintf(&b, "{Name: %q, Kind: %s, Required: %v", attr.name, kind, required)
-		if minLen > 0 {
-			fmt.Fprintf(&b, ", MinLen: %d", minLen)
+		fmt.Fprintf(&b, "{Name: %q, Kind: %s, Required: %v", attr.name, spec.kind, spec.required)
+		if spec.minLen > 0 {
+			fmt.Fprintf(&b, ", MinLen: %d", spec.minLen)
 		}
-		if maxLen > 0 {
-			fmt.Fprintf(&b, ", MaxLen: %d", maxLen)
+		if spec.maxLen > 0 {
+			fmt.Fprintf(&b, ", MaxLen: %d", spec.maxLen)
 		}
-		if length > 0 {
-			fmt.Fprintf(&b, ", Length: %d", length)
+		if spec.length > 0 {
+			fmt.Fprintf(&b, ", Length: %d", spec.length)
+		}
+		if spec.int64 {
+			b.WriteString(", Int64: true")
+		}
+		if spec.uuid {
+			b.WriteString(", UUID: true")
+		}
+		if len(spec.enum) > 0 {
+			b.WriteString(", Enum: []string{")
+			for i, value := range spec.enum {
+				if i > 0 {
+					b.WriteString(", ")
+				}
+				fmt.Fprintf(&b, "%q", value)
+			}
+			b.WriteString("}")
 		}
 		b.WriteString("}, ")
 	}
@@ -325,21 +403,49 @@ func specLiteral(f xsdFile) (string, error) {
 	return b.String(), nil
 }
 
+// fieldSpec — вычисленные тип, ограничения и обязательность одного атрибута XSD.
+type fieldSpec struct {
+	kind     string
+	minLen   int
+	maxLen   int
+	length   int
+	required bool
+	int64    bool
+	uuid     bool
+	enum     []string
+}
+
 // fieldSpecOf вычисляет тип, ограничения и обязательность одного атрибута XSD.
-func fieldSpecOf(attr *node) (kind string, minLen, maxLen, length int, required bool, err error) {
-	required = attr.required
+// int64Field — Go-тип поля записи int64: для xs:integer включается проверка диапазона.
+func fieldSpecOf(attr *node, int64Field bool) (fieldSpec, error) {
+	var spec fieldSpec
+	spec.required = attr.required
 	if base := attr.base(); base != "" {
-		kind, err = attrKind(base)
-		return kind, 0, 0, 0, required, err
+		kind, err := attrKind(base)
+		spec.kind = kind
+		spec.int64 = int64Field && (kind == "AttrInteger")
+		return spec, err
 	}
-	base, minLen, maxLen, length, ok := attr.restriction()
+	base, minLen, maxLen, length, enum, ok := attr.restriction()
 	if !ok {
 		if attr.base() == "" {
 			// Атрибут без типа и без restriction — xs:anySimpleType (PATH иерархий).
-			return "AttrString", 0, 0, 0, required, nil
+			spec.kind = "AttrString"
+			return spec, nil
 		}
-		return "", 0, 0, 0, false, fmt.Errorf("нет простого типа")
+		return spec, fmt.Errorf("нет простого типа")
 	}
-	kind, err = attrKind(base)
-	return kind, minLen, maxLen, length, required, err
+	kind, err := attrKind(base)
+	if err != nil {
+		return spec, err
+	}
+	spec.kind = kind
+	spec.minLen = minLen
+	spec.maxLen = maxLen
+	spec.length = length
+	spec.enum = enum
+	// Строки фиксированной длины 36 в ГАР — UUID (в БД колонка uuid).
+	spec.uuid = kind == "AttrString" && length == 36
+	spec.int64 = int64Field && kind == "AttrInteger"
+	return spec, nil
 }

@@ -34,9 +34,12 @@ type FieldSpec struct {
 	Name     string
 	Kind     AttrKind
 	Required bool
-	MinLen   int // xs:minLength для строк (обязательные строки имеют minLength=1)
-	MaxLen   int // xs:maxLength для строк
-	Length   int // xs:length для строк (GUID — 36)
+	MinLen   int      // xs:minLength для строк (обязательные строки имеют minLength=1)
+	MaxLen   int      // xs:maxLength для строк
+	Length   int      // xs:length для строк (GUID — 36)
+	Int64    bool     // xs:integer, чей Go-тип поля int64: значение должно помещаться в int64
+	UUID     bool     // строка — UUID (в БД колонка uuid)
+	Enum     []string // допустимые значения xs:enumeration из XSD
 }
 
 // FormatSpec — состав записи формата: имена элементов и атрибуты.
@@ -118,6 +121,9 @@ func checkValue(kind Kind, field *FieldSpec, value string) error {
 		if field.MaxLen > 0 && chars > field.MaxLen {
 			return attribute(fmt.Sprintf("длина %d, ожидается не более %d", chars, field.MaxLen))
 		}
+		if field.UUID && !isUUID(value) {
+			return attribute(fmt.Sprintf("значение %q не UUID", value))
+		}
 	case AttrDate:
 		if trimmed := strings.Trim(value, " \t\r\n"); trimmed == "" {
 			return attribute(fmt.Sprintf("неверная дата %q", value))
@@ -131,7 +137,7 @@ func checkValue(kind Kind, field *FieldSpec, value string) error {
 		if err := integer.UnmarshalText([]byte(value)); err != nil {
 			return attribute(err.Error())
 		}
-		if field.Kind == AttrLong {
+		if field.Kind == AttrLong || field.Int64 {
 			if _, err := integer.Int64(); err != nil {
 				return attribute(fmt.Sprintf("значение %s не помещается в int64", integer))
 			}
@@ -142,5 +148,47 @@ func checkValue(kind Kind, field *FieldSpec, value string) error {
 			return attribute(fmt.Sprintf("неверное логическое значение %q", value))
 		}
 	}
+	if len(field.Enum) > 0 {
+		candidate := value
+		if field.Kind == AttrInteger || field.Kind == AttrLong {
+			// Перечисление целых сравнивается в канонической форме: "+1" == "1".
+			var integer gartype.Integer
+			if err := integer.UnmarshalText([]byte(value)); err == nil {
+				candidate = integer.String()
+			}
+		}
+		allowed := false
+		for _, item := range field.Enum {
+			if candidate == item {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return attribute(fmt.Sprintf("значение %q не из перечисления %s", value, strings.Join(field.Enum, ", ")))
+		}
+	}
 	return nil
+}
+
+// isUUID проверяет формат UUID: 32 шестнадцатеричные цифры с дефисами 8-4-4-4-12.
+func isUUID(value string) bool {
+	if len(value) != 36 {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			validHex := '0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F'
+			if !validHex {
+				return false
+			}
+		}
+	}
+	return true
 }

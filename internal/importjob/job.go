@@ -26,6 +26,8 @@ const (
 	DefaultSchema = "gar"
 )
 
+var ErrNoSelectedFiles = errors.New("в архиве нет выбранных XML-файлов ГАР")
+
 // Режимы и состояния запуска (значения совпадают с internal/control).
 const (
 	ModeSnapshot     = "snapshot"
@@ -262,7 +264,7 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 		}
 	}
 	if selected == 0 {
-		runErr = fmt.Errorf("в архиве нет выбранных XML-файлов ГАР")
+		runErr = ErrNoSelectedFiles
 		return report, runErr
 	}
 	return report, nil
