@@ -1,0 +1,82 @@
+[21:50:39] ===== ХАОС: NATS =====
+[21:50:39] --- Фаза A: отказ NATS на 30 с под нагрузкой
+[21:50:39] Базовые метрики до отказа:
+[21:50:39]   pending importer: 0 0
+[21:50:39]   pending indexer:  0 0
+[21:50:39]   API RPS (1m):     76.88888888888889
+[21:50:39] PROBE [до]: suggest=200 details/101=200 api/readyz=200
+[21:50:39] STOP nats
+ Container gar-importer-nats-1 Stopping 
+ Container gar-importer-nats-1 Stopped 
+[21:50:39] PROBE [nats down]: suggest=200 details/101=200 api/readyz=200
+[21:50:39]   importer/readyz=503 indexer/readyz=503
+[21:50:45] PROBE [nats down]: suggest=200 details/101=200 api/readyz=200
+[21:50:46]   importer/readyz=503 indexer/readyz=503
+[21:50:52] PROBE [nats down]: suggest=200 details/101=200 api/readyz=200
+[21:50:52]   importer/readyz=503 indexer/readyz=503
+[21:50:58] PROBE [nats down]: suggest=200 details/101=200 api/readyz=200
+[21:50:58]   importer/readyz=503 indexer/readyz=503
+[21:51:04] PROBE [nats down]: suggest=200 details/101=200 api/readyz=200
+[21:51:04]   importer/readyz=503 indexer/readyz=503
+[21:51:10] START nats (ожидание healthy до 90 с)
+ Container gar-importer-nats-1 Starting 
+ Container gar-importer-nats-1 Started 
+[21:51:16] nats healthy через 6 с после start
+[21:51:16] importer /readyz 200 через 0 с после healthy NATS
+[21:51:16] indexer /readyz 200 через 0 с после healthy NATS
+[21:51:16] PROBE [после восстановления]: suggest=200 details/101=200 api/readyz=200
+[21:51:16]   pending importer: 0 0
+[21:51:16]   pending indexer:  0 0
+[21:51:16]   jetstream всего сообщений в потоке: n/a
+[21:51:16] --- Фаза B: durability JetStream (indexer остановлен, события копятся)
+[21:51:17]   до: pending indexer=0, documents_indexed=38
+[21:51:17] STOP indexer
+ Container gar-importer-indexer-1 Stopping 
+ Container gar-importer-indexer-1 Stopped 
+[21:51:17] Повторный seed фикстуры (build/tiny-gar.zip) — importer обработает и опубликует gar.objects.changed
+ Container gar-importer-postgres-1 Running 
+ Container gar-importer-nats-1 Running 
+ Container gar-importer-minio-1 Running 
+ Container gar-importer-postgres-1 Waiting 
+ Container gar-importer-nats-1 Waiting 
+ Container gar-importer-minio-1 Waiting 
+ Container gar-importer-minio-1 Healthy 
+ Container gar-importer-nats-1 Healthy 
+ Container gar-importer-postgres-1 Healthy 
+ Container gar-importer-minio-1 Running 
+ Container gar-importer-minio-1 Waiting 
+ Container gar-importer-minio-1 Healthy 
+ Container gar-importer-minio-init-run-d6910608fe20 Creating 
+ Container gar-importer-minio-init-run-d6910608fe20 Created 
+[38;5;6m [38;5;5m18:51:18.74 [0m[38;5;2mINFO [0m ==> 
+[38;5;6m [38;5;5m18:51:18.75 [0m[38;5;2mINFO [0m ==> [1mWelcome to the Bitnami minio-client container[0m
+[38;5;6m [38;5;5m18:51:18.75 [0m[38;5;2mINFO [0m ==> Subscribe to project updates by watching [1mhttps://github.com/bitnami/containers[0m
+[38;5;6m [38;5;5m18:51:18.75 [0m[38;5;2mINFO [0m ==> [38;5;3mNOTICE: Starting August 28th, 2025, only a limited subset of images/charts will remain available for free. Backup will be available for some time at the 'Bitnami Legacy' repository. More info at https://github.com/bitnami/containers/issues/83267[0m
+[38;5;6m [38;5;5m18:51:18.75 [0m[38;5;2mINFO [0m ==> 
+ Container gar-importer-minio-init-run-792251c1b9ff Creating 
+ Container gar-importer-minio-init-run-792251c1b9ff Created 
+[38;5;6m [38;5;5m18:51:19.19 [0m[38;5;2mINFO [0m ==> 
+[38;5;6m [38;5;5m18:51:19.19 [0m[38;5;2mINFO [0m ==> [1mWelcome to the Bitnami minio-client container[0m
+[38;5;6m [38;5;5m18:51:19.19 [0m[38;5;2mINFO [0m ==> Subscribe to project updates by watching [1mhttps://github.com/bitnami/containers[0m
+[38;5;6m [38;5;5m18:51:19.19 [0m[38;5;2mINFO [0m ==> [38;5;3mNOTICE: Starting August 28th, 2025, only a limited subset of images/charts will remain available for free. Backup will be available for some time at the 'Bitnami Legacy' repository. More info at https://github.com/bitnami/containers/issues/83267[0m
+[38;5;6m [38;5;5m18:51:19.19 [0m[38;5;2mINFO [0m ==> 
+ Container gar-importer-importer-run-18d38ebc1ac9 Creating 
+ Container gar-importer-importer-run-18d38ebc1ac9 Created 
+[21:51:19]   при остановленном indexer: pending importer=0, pending indexer=19 (накопились 19 событий)
+[21:51:19] START indexer
+ Container gar-importer-postgres-1 Waiting 
+ Container gar-importer-postgres-1 Healthy 
+ Container gar-importer-migrate-1 Starting 
+ Container gar-importer-migrate-1 Started 
+ Container gar-importer-nats-1 Waiting 
+ Container gar-importer-migrate-1 Waiting 
+ Container gar-importer-elasticsearch-1 Waiting 
+ Container gar-importer-migrate-1 Exited 
+ Container gar-importer-elasticsearch-1 Healthy 
+ Container gar-importer-nats-1 Healthy 
+ Container gar-importer-indexer-1 Starting 
+ Container gar-importer-indexer-1 Started 
+[21:51:27] indexer healthy через 6 с
+[21:51:27]   после подъёма indexer: pending indexer=0, documents_indexed: 38 → n/a
+[21:51:27] ===== ХАОС NATS ЗАВЕРШЁН =====
+[21:51:27] RESTORE: возвращаю nats и indexer

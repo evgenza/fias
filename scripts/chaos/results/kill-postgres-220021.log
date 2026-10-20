@@ -1,0 +1,32 @@
+[22:00:21] ===== ХАОС: POSTGRESQL =====
+[22:00:21] Прогрев кэша карточек (101 102 103 104 105 106 201 202 203 204 205 301 302 303 304 306 401 501)
+[22:00:21] Базовые метрики до отказа: pg connections=6
+[22:00:21] PROBE [до]: suggest=200 details/101=200 api/readyz=200
+[22:00:21] STOP postgres
+ Container gar-importer-postgres-1 Stopping 
+ Container gar-importer-postgres-1 Stopped 
+[22:00:22] PROBE [pg down]: suggest=200 details/101=200 api/readyz=503
+[22:00:22]   details/101 (кэш): 200 X-Cache:hit  details/999999 (мимо кэша): 500
+[22:00:22]   importer/readyz=503 indexer/readyz=200
+[22:00:28] PROBE [pg down]: suggest=200 details/101=200 api/readyz=503
+[22:00:28]   details/101 (кэш): 200 X-Cache:hit  details/999999 (мимо кэша): 500
+[22:00:28]   importer/readyz=503 indexer/readyz=200
+[22:00:34] PROBE [pg down]: suggest=200 details/101=200 api/readyz=503
+[22:00:34]   details/101 (кэш): 200 X-Cache:hit  details/999999 (мимо кэша): 500
+[22:00:34]   importer/readyz=503 indexer/readyz=200
+[22:00:40] PROBE [pg down]: suggest=200 details/101=200 api/readyz=503
+[22:00:40]   details/101 (кэш): 200 X-Cache:hit  details/999999 (мимо кэша): 500
+[22:00:40]   importer/readyz=503 indexer/readyz=200
+[22:00:46] PROBE [pg down]: suggest=200 details/101=200 api/readyz=503
+[22:00:46]   details/101 (кэш): 200 X-Cache:hit  details/999999 (мимо кэша): 500
+[22:00:46]   importer/readyz=503 indexer/readyz=200
+[22:00:52] START postgres (ожидание healthy до 90 с)
+ Container gar-importer-postgres-1 Starting 
+ Container gar-importer-postgres-1 Started 
+[22:00:59] postgres healthy через 6 с после start
+[22:00:59] address-api /readyz 200 через 0 с после healthy postgres
+[22:00:59]   details/306 после восстановления: 200 X-Cache:hit
+[22:00:59]   pg connections: 6 → 1
+[22:00:59] PROBE [после восстановления]: suggest=200 details/101=200 api/readyz=200
+[22:00:59] ===== ХАОС POSTGRESQL ЗАВЕРШЁН =====
+[22:00:59] RESTORE: возвращаю postgres
