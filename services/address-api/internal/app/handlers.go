@@ -160,26 +160,64 @@ func (h *handler) handleAddress(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if data, hit := h.cache.get(r.Context(), objectID); hit {
-		w.Header().Set(headerCache, "hit")
+	version := ""
+	cacheable := true
+	if h.cache.version != nil {
+		var err error
+		version, err = h.cache.version(r.Context())
+		if err != nil {
+			cacheable = false
+			h.log.WarnContext(r.Context(), "версия кэша недоступна", "error", err)
+		}
+	}
+	if cacheable {
+		if data, hit := h.cache.get(r.Context(), objectID, version); hit {
+			w.Header().Set(headerCache, "hit")
+			if string(data) == "null" {
+				h.writeDescribeError(w, r, objectID, address.ErrNotFound)
+				return
+			}
+			writeRawJSON(w, http.StatusOK, data)
+			return
+		}
+	}
+	load := func(ctx context.Context) ([]byte, error) {
+		details, err := h.describeWithChildren(ctx, objectID, true)
+		if errors.Is(err, address.ErrNotFound) {
+			return []byte("null"), nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(details)
+	}
+	result := h.cache.flights.DoChan(versionedKey(objectID, []string{version}), func() (any, error) {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
+		defer cancel()
+		data, err := load(ctx)
+		if err == nil && cacheable {
+			h.cache.set(ctx, objectID, data, version)
+		}
+		return data, err
+	})
+	select {
+	case <-r.Context().Done():
+		h.writeDescribeError(w, r, objectID, r.Context().Err())
+		<-result // Keep dependencies alive until the shared load and cache write finish.
+	case res := <-result:
+		if res.Err != nil {
+			h.writeDescribeError(w, r, objectID, res.Err)
+			return
+		}
+		data := res.Val.([]byte)
+		w.Header().Set(headerCache, "miss")
+		if string(data) == "null" {
+			h.writeDescribeError(w, r, objectID, address.ErrNotFound)
+			return
+		}
 		writeRawJSON(w, http.StatusOK, data)
-		return
 	}
 
-	details, err := h.describeWithChildren(r.Context(), objectID, true)
-	if err != nil {
-		h.writeDescribeError(w, r, objectID, err)
-		return
-	}
-	data, err := json.Marshal(details)
-	if err != nil {
-		h.log.ErrorContext(r.Context(), "кодирование карточки", "object_id", objectID, "error", err)
-		writeError(w, http.StatusInternalServerError, codeInternal, "внутренняя ошибка")
-		return
-	}
-	h.cache.set(r.Context(), objectID, data)
-	w.Header().Set(headerCache, "miss")
-	writeRawJSON(w, http.StatusOK, data)
 }
 
 // handleChildren — GET /api/v1/addresses/{id}/children: активные дети иерархии.

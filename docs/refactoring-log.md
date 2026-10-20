@@ -332,3 +332,6 @@ Children descriptions share ancestor/dictionary loads. Registry level selects ow
 
 ## 2026-10-20 — D5
 Suggest accepts up to 200 runes/20 words, region up to three ASCII digits. Cancellation/deadlines map to HTTP 499/504 and gRPC context status. ES request errors map to InvalidArgument or Internal; 429/5xx remain Unavailable. ES error bodies are omitted from logs.
+
+## 2026-10-20 — D6
+Redis uses 200ms I/O/connect deadlines without retries. Card TTL is bounded by 15m; missing cards use 30s. Cache v2 namespaces include the latest ready import id and finish time. If version lookup fails caching is bypassed. Concurrent loads share singleflight; shared work and SET survive individual request cancellation with bounded contexts.

@@ -67,11 +67,17 @@ func Run(ctx context.Context, cfg Config) error {
 	defer store.Close()
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.RedisAddr,
-		Password: cfg.RedisPassword,
+		Addr:        cfg.RedisAddr,
+		Password:    cfg.RedisPassword,
+		DialTimeout: 200 * time.Millisecond, ReadTimeout: 200 * time.Millisecond, WriteTimeout: 200 * time.Millisecond, MaxRetries: -1, ContextTimeoutEnabled: true,
 	})
 	defer redisClient.Close()
 	cardCache := newCache(redisClient, cfg.CacheTTL, log, met)
+	cardCache.version = func(ctx context.Context) (string, error) {
+		var version string
+		err := store.SQL().QueryRowContext(ctx, `SELECT COALESCE((SELECT id::text || ':' || finished_at::text FROM gar_control.import_runs WHERE state='ready' ORDER BY finished_at DESC NULLS LAST,id DESC LIMIT 1),'empty')`).Scan(&version)
+		return version, err
+	}
 
 	// gRPC-клиент suggester: ленивое соединение, Connect запускает его сразу,
 	// чтобы начать подключение до первого запроса.

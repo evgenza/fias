@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 
 	"gar-importer/internal/config"
+	"gar-importer/internal/control"
 	"gar-importer/internal/gartype"
 	"gar-importer/internal/migrations"
 	"gar-importer/internal/storage"
@@ -73,6 +74,7 @@ func (f *fakeSuggester) last() *suggestv1.SuggestRequest {
 // environment — собранный стенд: PostgreSQL + Redis + fake suggester + сервис.
 type environment struct {
 	baseURL     string
+	store       *storage.Store
 	redisClient *redis.Client
 	fake        *fakeSuggester
 	stopApp     context.CancelFunc
@@ -194,12 +196,12 @@ func TestAddressAPIEndToEnd(t *testing.T) {
 		if cached["full_address"] != "г Москва, ул Тверская, д 7" {
 			t.Fatalf("кэш: full_address %v", cached["full_address"])
 		}
-		exists, err := env.redisClient.Exists(ctx, "addr:v1:"+strconv.FormatInt(houseObjID, 10)).Result()
+		exists, err := env.redisClient.Exists(ctx, "addr:v2:empty:"+strconv.FormatInt(houseObjID, 10)).Result()
 		if err != nil {
 			t.Fatalf("redis EXISTS: %v", err)
 		}
 		if exists != 1 {
-			t.Fatal("ключа addr:v1:1003 нет в Redis после запроса карточки")
+			t.Fatal("ключа addr:v2:empty:1003 нет в Redis после запроса карточки")
 		}
 	})
 
@@ -211,6 +213,27 @@ func TestAddressAPIEndToEnd(t *testing.T) {
 		}
 		if !strings.Contains(body, `"code":"NOT_FOUND"`) {
 			t.Fatalf("ответ %s", body)
+		}
+	})
+
+	t.Run("negative cache and import invalidation", func(t *testing.T) {
+		resp := get(t, ctx, env.baseURL+"/api/v1/addresses/999999")
+		readBody(t, resp)
+		if resp.StatusCode != 404 || resp.Header.Get("X-Cache") != "hit" {
+			t.Fatalf("negative cache: %d %v", resp.StatusCode, resp.Header)
+		}
+		ttl, err := env.redisClient.TTL(ctx, "addr:v2:empty:999999").Result()
+		if err != nil || ttl <= 0 || ttl > 30*time.Second {
+			t.Fatalf("negative ttl %v: %v", ttl, err)
+		}
+		if _, err := env.store.Exec(ctx, `INSERT INTO gar_control.datasets (schema_name,scope,state) VALUES ('gar','all','ready');
+ INSERT INTO gar_control.import_runs (dataset_id,mode,source_path,source_digest,state,finished_at) SELECT id,'snapshot','test','test','ready',now() FROM gar_control.datasets WHERE schema_name='gar'`); err != nil {
+			t.Fatal(err)
+		}
+		resp = get(t, ctx, env.baseURL+"/api/v1/addresses/"+strconv.FormatInt(houseObjID, 10))
+		readBody(t, resp)
+		if resp.StatusCode != 200 || resp.Header.Get("X-Cache") != "miss" {
+			t.Fatalf("import invalidation: %d %v", resp.StatusCode, resp.Header)
 		}
 	})
 
@@ -389,6 +412,12 @@ func setupEnvironment(t *testing.T, ctx context.Context) *environment {
 	if _, err := runner.Apply(ctx); err != nil {
 		t.Fatalf("миграции: %v", err)
 	}
+	if _, err := store.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS gar_control`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := control.Open(ctx, store.SQL()); err != nil {
+		t.Fatal(err)
+	}
 	seed(t, ctx, store)
 
 	fake := &fakeSuggester{}
@@ -417,6 +446,7 @@ func setupEnvironment(t *testing.T, ctx context.Context) *environment {
 
 	return &environment{
 		baseURL:     "http://" + httpAddr,
+		store:       store,
 		redisClient: redisClient,
 		fake:        fake,
 		stopApp:     stopApp,

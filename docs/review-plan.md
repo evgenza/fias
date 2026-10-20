@@ -450,7 +450,7 @@ suggester, инфраструктура и CI. Находки сверены с 
   - `context.Canceled`/`DeadlineExceeded` → 499/504 на уровне Info,
     `status.FromContextError` в интерцепторе.
 
-### [ ] D6. Кэш Redis — Medium
+### [x] D6. Кэш Redis — Medium
 - **Файлы:** `services/address-api/internal/app/cache.go`, `app.go` (~66–69),
   `config.go` (~49–55), `handlers.go` (~171).
 - **Проблема:**
@@ -666,3 +666,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | D4 | [x] | Batch descriptions with shared ancestors, registry level routing, EXISTS for hierarchy-only parents, web limit 50; PostgreSQL pg_stat_statements regression: 200 children = 8 SQL on cold cache. |
 
 | 2026-10-20 | D5 | [x] | Shared q/region validation on HTTP/gRPC, ES 4xx mapped without response body leakage (429 remains retryable), cancellation/deadline → 499/504 and Info; gRPC metrics normalize context errors. Validation/error tests pass. |
+
+| 2026-10-20 | D6 | [x] | Redis 200ms/no retries, TTL ≤15m, keys include latest ready import id/finished_at (handles resumed runs), detached bounded SET, negative TTL 30s, per-object/version singleflight. E2E verifies Redis hit, negative TTL and invalidation after import. |

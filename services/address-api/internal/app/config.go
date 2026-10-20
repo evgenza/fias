@@ -48,8 +48,8 @@ func ConfigFromEnv() (Config, error) {
 	}
 	if value := os.Getenv("CACHE_TTL"); value != "" {
 		ttl, err := time.ParseDuration(value)
-		if err != nil || ttl <= 0 {
-			return cfg, fmt.Errorf("CACHE_TTL %q: ожидается положительная длительность (например 5m)", value)
+		if err != nil || ttl <= 0 || ttl > 15*time.Minute {
+			return cfg, fmt.Errorf("CACHE_TTL %q: ожидается длительность от 0 до 15m (например 5m)", value)
 		}
 		cfg.CacheTTL = ttl
 	}
