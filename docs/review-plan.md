@@ -280,7 +280,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Готово, когда:** `EXPLAIN` на фикстуре без Seq Scan по большим таблицам;
   результат индексации на фикстуре не изменился (golden-тест).
 
-### [ ] C3. Маршрутизация событий: изменения предков не доходят до потомков — High
+### [x] C3. Маршрутизация событий: изменения предков не доходят до потомков — High
 - **Зависимости:** C2 (иначе каскад умножит полные сканы), A1.
 - **Файлы:** `services/indexer/internal/app/app.go` (~238–256).
 - **Проблема:**
@@ -652,3 +652,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | B4 | [x] | Дизайн в decisions: snapshot/delta, версии, проверка base/applied, резерв digest, последовательный retry и MaxAckPending=1. Upsert защищён update_date, Ent регенерирован. D2→D1, старый snapshot, пропуск выпуска и старая строка отвергаются. Build/vet/lint/unit и PostgreSQL-регрессии прошли; общая integration будет повторена после волны. |
 
 | 2026-10-20 | C2 | [x] | Региональные object_id → LATERAL latest, keyset по 2000 с закрытием rows до обогащения/sink; безопасный CASE и индексы в Ent/миграции. Тест с одним соединением падал на deadline, теперь 2001 дом/2 страницы с прежними адресами; EXPLAIN без Seq Scan houses/adm_hierarchy на 50k посторонних строк. Build/vet/lint/unit и PostgreSQL-тест прошли. |
+
+| 2026-10-20 | C3 | [x] | Таблица зависимостей: ADDR_OBJ/REESTR/ADM/PARAM → все виды, HOUSES → house/apartment/room/carplace, APARTMENTS → apartment/room; MUN без пересборки. До исправления routing-тест выявил все шесть расхождений. E2E: переименование улицы обновляет дом, REESTR обновляет level; build/vet/lint/unit и indexer integration прошли. |

@@ -134,6 +134,33 @@ func TestIndexerHousesEndToEnd(t *testing.T) {
 		t.Fatalf("flags: got actual=%v active=%v", doc.IsActual, doc.IsActive)
 	}
 
+	// Street changes must reach the existing house, without a house event.
+	if _, err := store.Exec(ctx, `UPDATE gar.addr_obj SET name='Новая' WHERE object_id=$1`, streetObjID); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishObjectsChanged(ctx, events.ObjectsChanged{RunID: 2, Kind: "AS_ADDR_OBJ", Region: 77, Path: "77/AS_ADDR_OBJ_20261020_1.XML", CompletedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	waitAddress(t, ctx, searchClient, "г Москва, ул Новая, д 7")
+	// Registry events also refresh levels of already indexed objects.
+	if _, err := store.Exec(ctx, `UPDATE gar.reestr_objects SET level_id=11 WHERE object_id=$1`, houseObjID); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishObjectsChanged(ctx, events.ObjectsChanged{RunID: 3, Kind: "AS_REESTR_OBJECTS", Region: 77, Path: "77/AS_REESTR_OBJECTS_20261020_1.XML", CompletedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		latest := pollDocument(t, ctx, searchClient, strconv.FormatInt(houseObjID, 10))
+		if latest.Level == 11 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("registry level not refreshed: %+v", latest)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	// Завершаем сервис штатно.
 	stopApp()
 	select {
@@ -363,3 +390,18 @@ func pollDocument(t *testing.T, ctx context.Context, client *search.Client, id s
 }
 
 func ptr(v int64) *int64 { return &v }
+
+func waitAddress(t *testing.T, ctx context.Context, client *search.Client, want string) {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		doc := pollDocument(t, ctx, client, strconv.FormatInt(houseObjID, 10))
+		if doc.FullAddress == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("house still has old address: %q want %q", doc.FullAddress, want)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}

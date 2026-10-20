@@ -240,19 +240,21 @@ func (s *service) routeTasks(kind gar.Kind) ([]buildTask, bool) {
 		byDoc(search.KindCarplace, s.builder.BuildCarplaces),
 	}
 	switch kind {
-	case gar.KindAddrObj:
-		return all[:1], true
+	case gar.KindAddrObj, gar.KindReestrObjects, gar.KindParam:
+		return all, true
 	case gar.KindHouses:
-		return all[1:2], true
+		return append(append([]buildTask{}, all[1:4]...), all[5]), true
 	case gar.KindApartments:
-		return all[2:3], true
+		return all[2:4], true
 	case gar.KindRooms:
 		return all[3:4], true
 	case gar.KindSteads:
 		return all[4:5], true
 	case gar.KindCarplaces:
 		return all[5:6], true
-	case gar.KindAdmHierarchy, gar.KindMunHierarchy:
+	case gar.KindMunHierarchy:
+		return nil, true
+	case gar.KindAdmHierarchy:
 		// Иерархия меняет адресные строки всех видов объектов региона.
 		return all, true
 	default:
