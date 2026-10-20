@@ -94,10 +94,28 @@ type Options struct {
 	Progress       func(FileStats)
 	SchemaName     string // dataset; пусто — DefaultSchema
 	ProgramVersion string
+	// OnFileCompleted — необязательный хук завершения файла (например, публикация
+	// события в шину). Вызывается после успешного коммита данных (writer.Save),
+	// но до фиксации файла завершённым в журнале: ошибка хука помечает файл
+	// failed, и повторный запуск дообработает его (upsert идемпотентен).
+	// nil — хук пропускается.
+	OnFileCompleted func(ctx context.Context, event FileCompletedEvent) error
 	// ResumeRunID: >0 — продолжить указанный запуск; -1 — продолжить последний
 	// незавершённый с тем же digest; 0 — новый запуск. При resume проверяются
 	// digest и режим.
 	ResumeRunID int64
+}
+
+// FileCompletedEvent — событие успешной обработки одного файла плана:
+// данные закоммичены, целостность файла подтверждена полным чтением.
+type FileCompletedEvent struct {
+	RunID       int64
+	Kind        gar.Kind
+	Source      string // нормализованное семейство параметров (для PARAM)
+	Region      int    // 0 — общероссийский справочник
+	Path        string
+	Written     int64 // дедуплицированные операции записи (insert/update)
+	CompletedAt time.Time
 }
 
 // FileStats — прогресс по файлу.
@@ -359,6 +377,21 @@ func importFile(ctx context.Context, source Archive, writers WriterFactory, jour
 			_ = journal.FinishFile(context.WithoutCancel(ctx), fileID, writer.WriteOps(), false, err)
 		}
 		return stats, err
+	}
+	// Хук завершения вызывается до фиксации файла в журнале: ошибка хука
+	// (например, недоступность шины событий) оставляет файл незавершённым,
+	// и повторный запуск дообработает его с checkpoint.
+	if options.OnFileCompleted != nil {
+		event := FileCompletedEvent{
+			RunID: runID, Kind: entry.Kind, Source: entry.Source, Region: entry.Region,
+			Path: entry.Path, Written: writer.WriteOps(), CompletedAt: time.Now(),
+		}
+		if err := options.OnFileCompleted(ctx, event); err != nil {
+			if journal != nil {
+				_ = journal.FinishFile(context.WithoutCancel(ctx), fileID, writer.WriteOps(), false, err)
+			}
+			return stats, err
+		}
 	}
 	if journal != nil {
 		if err := journal.FinishFile(ctx, fileID, writer.WriteOps(), !result.Limited, nil); err != nil {
