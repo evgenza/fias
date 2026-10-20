@@ -92,7 +92,7 @@ func Run(ctx context.Context, cfg Config) error {
 		log:       log,
 	}
 
-	mux := newMux(h, registry, readyz(store, cardCache, grpcConn))
+	mux := newMux(h, registry, readyz(store.SQL(), cardCache, grpcConn, met, log))
 	// Цепочка middleware: трейсинг → метрики (шаблон маршрута как метка) → лог.
 	var root http.Handler = mux
 	root = logRequests(log, root)
@@ -229,21 +229,45 @@ func (r *statusRecorder) WriteHeader(code int) {
 // Unwrap отдаёт исходный ResponseWriter для http.ResponseController.
 func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
-// readyz — проверка готовности: PostgreSQL, Redis и gRPC-соединение
-// с suggester (состояние Ready).
-func readyz(store *storage.Store, cardCache *cache, grpcConn *grpc.ClientConn) func(context.Context) error {
+type readinessDB interface {
+	PingContext(context.Context) error
+}
+
+// readyz — проверка готовности: доступность PostgreSQL. Redis и suggester
+// необязательны (карточки работают из PostgreSQL), их недоступность не валит
+// реплики из балансировки: состояние отдаётся в метрике
+// address_api_dependency_up и логе.
+func readyz(db readinessDB, cardCache *cache, grpcConn *grpc.ClientConn, met *metrics, log *slog.Logger) func(context.Context) error {
 	return func(ctx context.Context) error {
 		pingCtx, cancel := context.WithTimeout(ctx, readyzTimeout)
 		defer cancel()
-		if err := store.SQL().PingContext(pingCtx); err != nil {
-			return fmt.Errorf("PostgreSQL: %w", err)
+		pgErr := db.PingContext(pingCtx)
+		if pgErr != nil {
+			log.WarnContext(ctx, "readiness: PostgreSQL недоступна", "error", pgErr)
 		}
-		if err := cardCache.ping(pingCtx); err != nil {
-			return err
+		// Канал через 30 минут простоя уходит в IDLE и сам не просыпается:
+		// GetState() его не будит, поэтому будим явно.
+		if grpcConn.GetState() == connectivity.Idle {
+			grpcConn.Connect()
 		}
-		if state := grpcConn.GetState(); state != connectivity.Ready {
-			return fmt.Errorf("suggester gRPC: состояние %s", state)
+		suggesterUp := grpcConn.GetState() == connectivity.Ready
+		met.dependency.WithLabelValues("suggester").Set(boolToFloat(suggesterUp))
+		if !suggesterUp {
+			log.WarnContext(ctx, "readiness: suggester недоступен", "state", grpcConn.GetState())
 		}
-		return nil
+		redisErr := cardCache.ping(pingCtx)
+		met.dependency.WithLabelValues("redis").Set(boolToFloat(redisErr == nil))
+		if redisErr != nil {
+			log.WarnContext(ctx, "readiness: Redis недоступен", "error", redisErr)
+		}
+		return pgErr
 	}
+}
+
+// boolToFloat переводит состояние зависимости в значение gauge.
+func boolToFloat(up bool) float64 {
+	if up {
+		return 1
+	}
+	return 0
 }

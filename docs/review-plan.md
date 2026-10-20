@@ -374,7 +374,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 
 ## D. address-api и suggester
 
-### [ ] D1. Readiness: IDLE gRPC и жёсткие зависимости — High
+### [x] D1. Readiness: IDLE gRPC и жёсткие зависимости — High
 - **Файлы:** `services/address-api/internal/app/app.go` (~215–231),
   `internal/platform/http.go` (~75).
 - **Проблема:**
@@ -633,3 +633,4 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | E3 | [x] | Удалён .idea из индекса, добавлен ignore, пароли заменены change_me, DATABASE_URL использует POSTGRES_PORT; compose config валиден. |
 | 2026-10-20 | A3 | [x] | Ошибки данных больше не повторяются как временные; диапазоны int64 по Ent-моделям, XSD enum, UUID, RecordError при декодировании, sentinel пустого выбора, ZIP/flate/SQLSTATE 22 и 23. Регрессии воспроизведены до исправления; build, vet, lint, unit, integration и оба генератора -verify прошли. |
 | 2026-10-20 | D3 | [x] | Ограничена кардинальность метрик и спанов; методы вне списка дают OTHER, имена спанов берутся из r.Pattern, удалённый sampled-флаг не управляет выборкой, baggage не переносится. Unit-тесты, build, vet, lint и integration прошли. |
+| 2026-10-20 | D1 | [x] | Readiness зависит от PostgreSQL, будит IDLE gRPC и публикует состояние Redis/suggester в метриках; клиент получает только not ready, подробности логируются. Тест на отказ необязательных зависимостей и пробуждение IDLE, build, vet, lint, unit и integration прошли. |

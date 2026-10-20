@@ -8,8 +8,9 @@ import (
 
 // metrics — метрики сервиса.
 type metrics struct {
-	suggest *prometheus.CounterVec
-	cache   *prometheus.CounterVec
+	suggest    *prometheus.CounterVec
+	cache      *prometheus.CounterVec
+	dependency *prometheus.GaugeVec
 }
 
 // newMetrics создаёт и регистрирует метрики address-api.
@@ -23,7 +24,11 @@ func newMetrics(registry *platform.Metrics) *metrics {
 			Name: "address_cache_total",
 			Help: "Количество обращений к кэшу карточек по результату (hit, miss, error).",
 		}, []string{"result"}),
+		dependency: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "address_api_dependency_up",
+			Help: "Состояние необязательных зависимостей (redis, suggester): 1 — доступна, 0 — нет.",
+		}, []string{"dependency"}),
 	}
-	registry.MustRegister(m.suggest, m.cache)
+	registry.MustRegister(m.suggest, m.cache, m.dependency)
 	return m
 }

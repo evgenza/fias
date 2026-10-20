@@ -249,3 +249,7 @@ Smoke проверяет job и health одного target через jq; absent
 ## Волна 0 / D3 (2026-10-20)
 
 Ограничена кардинальность метрик и спанов; методы вне списка дают OTHER, имена спанов берутся из r.Pattern, удалённый sampled-флаг не управляет выборкой, baggage не переносится. Unit-тесты, build, vet, lint и integration прошли.
+
+## Волна 0 / D1 (2026-10-20)
+
+Readiness зависит от PostgreSQL, будит IDLE gRPC и публикует состояние Redis/suggester в метриках; клиент получает только not ready, подробности логируются. Тест на отказ необязательных зависимостей и пробуждение IDLE, build, vet, lint, unit и integration прошли.

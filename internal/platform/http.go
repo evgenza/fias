@@ -71,8 +71,11 @@ func HealthMux(ready func(context.Context) error) *http.ServeMux {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		if ready != nil {
 			if err := ready(r.Context()); err != nil {
+				// Клиенту — только факт неготовности, детали (адреса,
+				// пользователь БД) остаются в логе.
+				slog.WarnContext(r.Context(), "проверка готовности не пройдена", "error", err)
 				w.WriteHeader(http.StatusServiceUnavailable)
-				fmt.Fprintf(w, "не готов: %v\n", err)
+				_, _ = w.Write([]byte("not ready\n"))
 				return
 			}
 		}

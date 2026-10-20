@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -48,6 +49,25 @@ func TestHealthMuxNilReady(t *testing.T) {
 	HealthMux(nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("/readyz без проверки: got %d, want 200", recorder.Code)
+	}
+}
+
+// Тест проверяет, что тело /readyz при ошибке не раскрывает детали
+// (адреса, пользователь БД): клиенту — только «not ready», детали в логе.
+func TestHealthMuxBodyHidesDetails(t *testing.T) {
+	fail := errors.New("dial tcp 10.0.0.5:5432: user=gar: connection refused")
+	mux := HealthMux(func(context.Context) error { return fail })
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("/readyz при ошибке: got %d, want 503", recorder.Code)
+	}
+	body := recorder.Body.String()
+	if body != "not ready\n" {
+		t.Fatalf("тело /readyz: got %q, want %q", body, "not ready\n")
+	}
+	if strings.Contains(body, "10.0.0.5") || strings.Contains(body, "user=gar") {
+		t.Fatalf("тело /readyz раскрывает детали ошибки: %q", body)
 	}
 }
 
