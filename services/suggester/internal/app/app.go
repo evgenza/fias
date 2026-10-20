@@ -39,7 +39,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer func() {
 		// Родитель уже отменён: завершаем провайдер безотменным контекстом.
-		_ = shutdown(context.WithoutCancel(ctx))
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = shutdown(shutdownCtx)
 	}()
 	registry := platform.NewRegistry("suggester")
 	grpcMetrics := server.NewMetrics(registry)

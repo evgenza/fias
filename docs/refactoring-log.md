@@ -323,3 +323,6 @@ Wave 2 verification: build/vet/lint/unit and full integration passed. Preview ev
 - Правила одинаковы для поисковых документов и DescribeObject. Golden-регрессии
   проверяют пример адреса комнаты из руководства ФНС, дом без основного номера,
   муниципальный участок, приоритет иерархий и сроки официальных наименований.
+
+## 2026-10-20 — D2
+HTTP: read 15s, write 30s, idle 120s, headers 64KiB; API contexts 10s. Shutdown drains readiness for 2s and waits for handlers before closing dependencies. Tracing shutdown limited to 5s.

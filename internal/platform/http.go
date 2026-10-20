@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -18,18 +20,19 @@ const shutdownTimeout = 10 * time.Second
 // клиентов на HTTP/2, остальным сервисам просто не мешает.
 // Старт и останов пишутся в slog.Default(). Ошибка запуска возвращается сразу.
 func RunHTTPServer(ctx context.Context, addr string, handler http.Handler) error {
-	// h2c через Server.Protocols: пакет golang.org/x/net/http2/h2c объявлен
-	// deprecated, стандартная библиотека (Go 1.24+) умеет это сама.
-	// Ненулевой Protocols — точный список, поэтому HTTP/1.1 включаем явно.
-	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
-	protocols.SetUnencryptedHTTP2(true)
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-		Protocols:         protocols,
-	}
+	requestCtx, cancelRequests := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelRequests()
+	var active sync.WaitGroup
+	server := newHTTPServer(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		active.Add(1)
+		defer active.Done()
+		if r.URL.Path == "/readyz" && ctx.Err() != nil {
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	server.BaseContext = func(net.Listener) context.Context { return requestCtx }
 	served := make(chan error, 1)
 	go func() {
 		slog.Info("HTTP-сервер запущен", "addr", addr)
@@ -44,11 +47,15 @@ func RunHTTPServer(ctx context.Context, addr string, handler http.Handler) error
 		return err
 	case <-ctx.Done():
 	}
+	// Сначала readiness снимает реплику с балансировки.
+	time.Sleep(2 * time.Second)
 	// Родитель уже отменён: таймаут отсчитывается от безотменной копии.
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		_ = server.Close()
+		cancelRequests()
+		active.Wait()
 		return fmt.Errorf("остановка HTTP-сервера %s: %w", addr, err)
 	}
 	if err := <-served; err != nil {
@@ -83,4 +90,20 @@ func HealthMux(ready func(context.Context) error) *http.ServeMux {
 		_, _ = w.Write([]byte("ok\n"))
 	})
 	return mux
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	// h2c через Server.Protocols: пакет golang.org/x/net/http2/h2c объявлен
+	// deprecated, стандартная библиотека (Go 1.24+) умеет это сама.
+	// Ненулевой Protocols — точный список, поэтому HTTP/1.1 включаем явно.
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		Protocols:         protocols,
+		ReadTimeout:       15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second, MaxHeaderBytes: 64 << 10,
+	}
 }

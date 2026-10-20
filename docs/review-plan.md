@@ -389,7 +389,7 @@ suggester, инфраструктура и CI. Находки сверены с 
   - состояние Redis и suggester отдавать в метриках;
   - тело ответа — просто «not ready», детали писать в лог.
 
-### [ ] D2. Таймауты HTTP-сервера и запросов — Medium
+### [x] D2. Таймауты HTTP-сервера и запросов — Medium
 - **Файлы:** `internal/platform/http.go` (~27–32, 50),
   `services/address-api/internal/app/app.go`.
 - **Проблема:** задан только `ReadHeaderTimeout`: возможны Slowloris по телу и
@@ -660,3 +660,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | Wave 2 | [x] | B3/B4/C2/C3/C6: build, make vet, golangci-lint, unit and full make test-integration passed with isolated PostgreSQL. Final release/Msg-Id changes additionally verified by importjob/worker integration and build/vet/lint/unit. Both GAR generators -verify are clean. |
 
 | 2026-10-20 | C7 | [x] | Волна 3: дом без HOUSENUM, Name/TypeName по первому номеру; действующий PARAM 16 уровней 1/3/4, регион из корня PATH при отсутствии REGIONCODE, MUN fallback и маршрутизация; типы уровней 9/17 из ADDR_OBJ_TYPES. Регрессии сначала воспроизведены; golden примера комнаты из руководства, build/vet/lint/unit и полный integration с отдельной PostgreSQL прошли. |
+
+| 2026-10-20 | D2 | [x] | HTTP limits, API deadline 10s, readiness drain 2s, forced shutdown cancels and waits for handlers; tracing shutdown bounded to 5s. Platform/API tests pass. |

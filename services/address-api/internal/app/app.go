@@ -46,7 +46,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer func() {
 		// Родитель уже отменён: завершаем провайдер безотменным контекстом.
-		_ = shutdown(context.WithoutCancel(ctx))
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = shutdown(shutdownCtx)
 	}()
 	registry := platform.NewRegistry("address-api")
 	met := newMetrics(registry)
@@ -116,9 +118,9 @@ func newMux(h *handler, registry *platform.Metrics, ready func(context.Context) 
 	mux := platform.HealthMux(ready)
 	mux.Handle("/metrics", registry.Handler())
 
-	mux.HandleFunc("GET /api/v1/suggest", h.handleSuggest)
-	mux.HandleFunc("GET /api/v1/addresses/{id}", h.handleAddress)
-	mux.HandleFunc("GET /api/v1/addresses/{id}/children", h.handleChildren)
+	mux.HandleFunc("GET /api/v1/suggest", apiDeadline(h.handleSuggest))
+	mux.HandleFunc("GET /api/v1/addresses/{id}", apiDeadline(h.handleAddress))
+	mux.HandleFunc("GET /api/v1/addresses/{id}/children", apiDeadline(h.handleChildren))
 
 	mux.HandleFunc("GET /openapi.yaml", serveOpenAPI)
 
@@ -270,4 +272,12 @@ func boolToFloat(up bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+func apiDeadline(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		next(w, r.WithContext(ctx))
+	}
 }
