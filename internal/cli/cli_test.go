@@ -38,6 +38,19 @@ func TestCLIUsageErrors(t *testing.T) {
 	}
 }
 
+// --help подкоманды печатает usage в stdout и завершается без ошибки.
+func TestCLIHelpFlag(t *testing.T) {
+	for _, command := range []string{"migrate", "import", "worker", "request-import"} {
+		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+		if err := cli.Run(context.Background(), []string{command, "--help"}, stdout, stderr); err != nil {
+			t.Fatalf("%s --help: %v", command, err)
+		}
+		if !strings.Contains(stdout.String(), "gar-importer") {
+			t.Fatalf("%s --help: no usage in stdout", command)
+		}
+	}
+}
+
 func TestCLIImportFlagValidation(t *testing.T) {
 	// Ошибки флагов выявляются до открытия БД и архива.
 	cases := []struct {
@@ -49,6 +62,12 @@ func TestCLIImportFlagValidation(t *testing.T) {
 		{[]string{"import", "--zip", "x.zip", "--regions", "100"}, "неверный регион"},
 		{[]string{"import", "--zip", "x.zip", "--formats", "NO_SUCH_FORMAT"}, "неизвестный формат"},
 		{[]string{"import", "--zip", "x.zip", "--batch-size", "5000"}, "размер пакета"},
+		{[]string{"request-import"}, "usage"},
+		{[]string{"request-import", "--s3-uri", "http://bucket/key.zip"}, "usage"},
+		{[]string{"request-import", "--s3-uri", "s3://bucket"}, "usage"},
+		{[]string{"request-import", "--s3-uri", "s3://bucket/key.zip", "--regions", "0"}, "неверный регион"},
+		{[]string{"request-import", "--s3-uri", "s3://bucket/key.zip", "--batch-size", "5000"}, "usage"},
+		{[]string{"worker", "extra"}, "usage"},
 	}
 	for _, c := range cases {
 		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}

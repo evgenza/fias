@@ -221,6 +221,51 @@ services:
       - "127.0.0.1:16686:16686"
       - "127.0.0.1:4317:4317"
 
+  # One-shot: применение версионированных миграций схемы gar.
+  migrate:
+    build:
+      context: .
+      dockerfile: services/importer/Dockerfile
+    restart: "no"
+    command: ["migrate"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-gar}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-gar}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Фоновый исполнитель импорта: задачи из NATS JetStream, архивы из MinIO,
+  # записи в PostgreSQL, события gar.objects.changed обратно в NATS.
+  importer:
+    build:
+      context: .
+      dockerfile: services/importer/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-gar}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-gar}?sslmode=disable
+      NATS_URL: nats://nats:4222
+      S3_ENDPOINT: minio:9000
+      S3_BUCKET: ${MINIO_BUCKET:-gar-archives}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "127.0.0.1:9211:9211"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9211/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
 volumes:
   postgres_data:
   es_data:

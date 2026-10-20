@@ -1,0 +1,11 @@
+# Контекст сборки Docker: только исходники, миграции и манифесты модулей.
+.git
+.idea
+.env
+.env.*
+bin
+docs
+xsd
+*.zip
+*.exe
+.DS_Store

@@ -4,10 +4,13 @@ package cli
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -15,11 +18,14 @@ import (
 	"gar-importer/ent/migrate"
 	"gar-importer/internal/config"
 	"gar-importer/internal/control"
+	"gar-importer/internal/events"
 	"gar-importer/internal/gar"
 	"gar-importer/internal/importjob"
 	"gar-importer/internal/input/zipgar"
 	"gar-importer/internal/migrations"
+	"gar-importer/internal/objectstorage"
 	"gar-importer/internal/storage"
+	"gar-importer/internal/worker"
 )
 
 // ErrUsage означает ошибку в аргументах командной строки (код выхода 2).
@@ -31,9 +37,11 @@ const usage = `gar-importer — подготовка выгрузки ГАР (Ф
   gar-importer <команда> [аргументы]
 
 Команды:
-  version  — версия сборки
-  migrate  — применить схемы Ent к PostgreSQL (DATABASE_URL из окружения или .env)
-  import   — потоковый импорт локального ZIP в таблицы PostgreSQL через Ent
+  version         — версия сборки
+  migrate         — применить схемы Ent к PostgreSQL (DATABASE_URL из окружения или .env)
+  import          — потоковый импорт локального ZIP в таблицы PostgreSQL через Ent
+  worker          — фоновый исполнитель: задачи импорта из NATS, архивы из S3/MinIO
+  request-import  — разовая публикация задачи импорта в NATS JetStream
 
 Миграция:
   gar-importer migrate [--write-sql migrations/0001_ent_init.sql]
@@ -41,6 +49,17 @@ const usage = `gar-importer — подготовка выгрузки ГАР (Ф
 Импорт:
   gar-importer import --zip /path/gar_xml.zip [--regions 77,50]
       [--formats AS_HOUSES,AS_ADDR_OBJ] [--batch-size 1000] [--limit-per-file 1000]
+
+Воркер:
+  gar-importer worker [--nats nats://127.0.0.1:4222] [--s3-endpoint 127.0.0.1:9000]
+      [--s3-bucket gar-archives] [--s3-access-key ...] [--s3-secret-key ...]
+      [--metrics-addr :9211] [--migrations migrations/atlas]
+  DATABASE_URL читается из окружения или .env; параметры S3 — из env S3_*.
+
+Постановка задачи:
+  gar-importer request-import --s3-uri s3://gar-archives/2026-10/gar_xml.zip
+      [--regions 77,50] [--limit-per-file 1000] [--batch-size 1000]
+      [--nats nats://127.0.0.1:4222]
 `
 
 // Run выполняет команду; возвращает ErrUsage для некорректных аргументов.
@@ -54,21 +73,31 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stdout, "gar-importer dev")
 		return nil
 	case "migrate":
-		if err := runMigrate(ctx, args[1:], stdout); err != nil {
-			fmt.Fprintln(stderr, "migrate:", err)
-			return err
-		}
-		return nil
+		return finishCommand("migrate", runMigrate(ctx, args[1:], stdout), stdout, stderr)
 	case "import":
-		if err := runImport(ctx, args[1:], stdout, stderr); err != nil {
-			fmt.Fprintln(stderr, "import:", err)
-			return err
-		}
-		return nil
+		return finishCommand("import", runImport(ctx, args[1:], stdout, stderr), stdout, stderr)
+	case "worker":
+		return finishCommand("worker", runWorker(ctx, args[1:]), stdout, stderr)
+	case "request-import":
+		return finishCommand("request-import", runRequestImport(ctx, args[1:], stdout), stdout, stderr)
 	default:
 		fmt.Fprint(stderr, usage)
 		return ErrUsage
 	}
+}
+
+// finishCommand обрабатывает результат подкоманды: запрос помощи (--help)
+// выводит общий usage без ошибки, прочие ошибки печатаются с именем команды.
+func finishCommand(name string, err error, stdout, stderr io.Writer) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, flag.ErrHelp) {
+		fmt.Fprint(stdout, usage)
+		return nil
+	}
+	fmt.Fprintln(stderr, name+":", err)
+	return err
 }
 
 func runMigrate(ctx context.Context, args []string, stdout io.Writer) error {
@@ -77,7 +106,7 @@ func runMigrate(ctx context.Context, args []string, stdout io.Writer) error {
 	plan := flags.Bool("plan", false, "показать неприменённые миграции, не меняя базу")
 	baseline := flags.Bool("baseline", false, "пометить существующую legacy-схему как текущую (после проверки)")
 	if err := flags.Parse(args); err != nil {
-		return fmt.Errorf("%w: %v", ErrUsage, err)
+		return fmt.Errorf("%w: %w", ErrUsage, err)
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("%w: неизвестные аргументы: %v", ErrUsage, flags.Args())
@@ -145,7 +174,7 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	limit := flags.Int64("limit-per-file", 0, "первые N записей каждого XML для теста; 0 — весь файл")
 	resume := flags.Bool("resume", false, "продолжить последний незавершённый запуск этого архива")
 	if err := flags.Parse(args); err != nil {
-		return fmt.Errorf("%w: %v", ErrUsage, err)
+		return fmt.Errorf("%w: %w", ErrUsage, err)
 	}
 	if *archivePath == "" || flags.NArg() != 0 {
 		return fmt.Errorf("%w: используйте import --zip /путь/gar_xml.zip", ErrUsage)
@@ -154,15 +183,11 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if *resume {
 		options.ResumeRunID = -1
 	}
-	if *regionList != "" {
-		for _, token := range strings.Split(*regionList, ",") {
-			region, err := strconv.Atoi(strings.TrimSpace(token))
-			if err != nil || region < 1 || region > 99 {
-				return fmt.Errorf("неверный регион %q", token)
-			}
-			options.Regions = append(options.Regions, region)
-		}
+	regions, err := parseRegions(*regionList)
+	if err != nil {
+		return err
 	}
+	options.Regions = regions
 	if *formatList != "" {
 		for _, token := range strings.Split(*formatList, ",") {
 			name := strings.TrimSpace(token)
@@ -216,6 +241,150 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		fmt.Fprintf(stderr, "Пропущен XML %s: %s\n", skipped.Name, skipped.Reason)
 	}
 	return err
+}
+
+// runWorker запускает фонового исполнителя: задачи из NATS JetStream,
+// архивы из S3/MinIO, метрики и проверки на --metrics-addr.
+func runWorker(ctx context.Context, args []string) error {
+	flags := flag.NewFlagSet("worker", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	natsURL := flags.String("nats", envOr("NATS_URL", "nats://127.0.0.1:4222"), "URL NATS JetStream (env NATS_URL)")
+	s3env := objectstorage.ConfigFromEnv("")
+	s3endpoint := flags.String("s3-endpoint", envOr("S3_ENDPOINT", "127.0.0.1:9000"), "endpoint S3/MinIO (env S3_ENDPOINT)")
+	s3bucket := flags.String("s3-bucket", envOr("S3_BUCKET", "gar-archives"), "бакет архивов по умолчанию (env S3_BUCKET)")
+	s3accessKey := flags.String("s3-access-key", s3env.AccessKey, "access key S3 (env S3_ACCESS_KEY)")
+	s3secretKey := flags.String("s3-secret-key", s3env.SecretKey, "secret key S3 (env S3_SECRET_KEY)")
+	s3useSSL := flags.Bool("s3-use-ssl", s3env.UseSSL, "HTTPS для S3 (env S3_USE_SSL)")
+	metricsAddr := flags.String("metrics-addr", envOr("WORKER_HTTP_ADDR", ":9211"), "адрес HTTP /metrics,/healthz,/readyz (env WORKER_HTTP_ADDR)")
+	migrationsDir := flags.String("migrations", envOr("GAR_MIGRATIONS_DIR", "migrations/atlas"), "каталог миграций Atlas (env GAR_MIGRATIONS_DIR)")
+	if err := flags.Parse(args); err != nil {
+		return fmt.Errorf("%w: %w", ErrUsage, err)
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("%w: неизвестные аргументы: %v", ErrUsage, flags.Args())
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	return worker.Run(ctx, worker.Config{
+		Config:  cfg,
+		NATSUrl: *natsURL,
+		S3: objectstorage.Config{
+			Endpoint:  *s3endpoint,
+			AccessKey: *s3accessKey,
+			SecretKey: *s3secretKey,
+			UseSSL:    *s3useSSL,
+		},
+		S3BucketDefault: *s3bucket,
+		MetricsAddr:     *metricsAddr,
+		MigrationsDir:   *migrationsDir,
+	})
+}
+
+// runRequestImport публикует разовую задачу импорта архива из S3 в NATS
+// JetStream и печатает RequestID опубликованного запроса.
+func runRequestImport(ctx context.Context, args []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("request-import", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	s3uri := flags.String("s3-uri", "", "URI архива в хранилище: s3://bucket/key (обязателен)")
+	regionList := flags.String("regions", "", "коды регионов через запятую; справочники включаются всегда")
+	limit := flags.Int64("limit-per-file", 0, "первые N записей каждого XML для пробы; 0 — весь файл")
+	batchSize := flags.Int("batch-size", 0, "записей в пакете (0 — по умолчанию)")
+	natsURL := flags.String("nats", envOr("NATS_URL", "nats://127.0.0.1:4222"), "URL NATS JetStream (env NATS_URL)")
+	if err := flags.Parse(args); err != nil {
+		return fmt.Errorf("%w: %w", ErrUsage, err)
+	}
+	if *s3uri == "" || flags.NArg() != 0 {
+		return fmt.Errorf("%w: используйте request-import --s3-uri s3://bucket/key", ErrUsage)
+	}
+	bucket, key, err := parseS3URI(*s3uri)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrUsage, err)
+	}
+	regions, err := parseRegions(*regionList)
+	if err != nil {
+		return err
+	}
+	if *limit < 0 || *batchSize < 0 || *batchSize > importjob.MaxBatchSize {
+		return fmt.Errorf("%w: неверные --limit-per-file или --batch-size (0..%d)", ErrUsage, importjob.MaxBatchSize)
+	}
+	requestID, err := newRequestID()
+	if err != nil {
+		return err
+	}
+	conn, err := events.Connect(*natsURL)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	js, err := conn.JetStream()
+	if err != nil {
+		return fmt.Errorf("контекст JetStream: %w", err)
+	}
+	if _, err := events.EnsureStream(ctx, js); err != nil {
+		return err
+	}
+	event := events.ImportRequested{
+		RequestID:    requestID,
+		Bucket:       bucket,
+		Key:          key,
+		Regions:      regions,
+		LimitPerFile: *limit,
+		BatchSize:    *batchSize,
+		RequestedAt:  time.Now().UTC(),
+	}
+	if err := events.NewPublisher(js).PublishImportRequested(ctx, event); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "Задача опубликована: RequestID=%s\n", requestID)
+	return nil
+}
+
+// parseS3URI разбирает URI вида s3://bucket/key.
+func parseS3URI(uri string) (bucket, key string, err error) {
+	rest, ok := strings.CutPrefix(uri, "s3://")
+	if !ok {
+		return "", "", fmt.Errorf("ожидается URI вида s3://bucket/key, получено %q", uri)
+	}
+	bucket, key, ok = strings.Cut(rest, "/")
+	if !ok || bucket == "" || key == "" {
+		return "", "", fmt.Errorf("ожидается URI вида s3://bucket/key, получено %q", uri)
+	}
+	return bucket, key, nil
+}
+
+// parseRegions разбирает коды регионов через запятую; пустая строка — все регионы.
+func parseRegions(list string) ([]int, error) {
+	if list == "" {
+		return nil, nil
+	}
+	var regions []int
+	for _, token := range strings.Split(list, ",") {
+		region, err := strconv.Atoi(strings.TrimSpace(token))
+		if err != nil || region < 1 || region > 99 {
+			return nil, fmt.Errorf("неверный регион %q", token)
+		}
+		regions = append(regions, region)
+	}
+	return regions, nil
+}
+
+// newRequestID генерирует идентификатор задачи: 16 байт crypto/rand в hex.
+func newRequestID() (string, error) {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", fmt.Errorf("генерация RequestID: %w", err)
+	}
+	return hex.EncodeToString(random[:]), nil
+}
+
+// envOr возвращает значение переменной окружения или значение по умолчанию.
+func envOr(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func printReport(report importjob.Report, stdout io.Writer) {
