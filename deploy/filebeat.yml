@@ -1,0 +1,28 @@
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      templates:
+        - config:
+            - type: container
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*.log
+
+processors:
+  - decode_json_fields:
+      fields: ["message"]
+      target: ""
+      overwrite_keys: true
+      process_array: false
+      max_depth: 2
+  - add_docker_metadata: ~
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "gar-logs-%{+yyyy.MM.dd}"
+
+setup.template.name: "gar-logs"
+setup.template.pattern: "gar-logs-*"
+setup.ilm.enabled: false
+
+logging.level: warning
+monitoring.enabled: false

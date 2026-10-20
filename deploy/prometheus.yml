@@ -1,0 +1,45 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: nats-exporter
+    static_configs:
+      - targets: ["nats-exporter:7777"]
+
+  - job_name: postgres-exporter
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  - job_name: elasticsearch-exporter
+    static_configs:
+      - targets: ["elasticsearch-exporter:9114"]
+
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]
+
+  # Go-сервисы платформы (появятся в следующих фазах; до тех пор targets будут down)
+  - job_name: importer
+    static_configs:
+      - targets: ["importer:9211"]
+
+  - job_name: indexer
+    static_configs:
+      - targets: ["indexer:9212"]
+
+  - job_name: suggester
+    static_configs:
+      - targets: ["suggester:9213"]
+
+  - job_name: address-api
+    static_configs:
+      - targets: ["address-api:8080"]
