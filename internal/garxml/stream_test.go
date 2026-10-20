@@ -76,9 +76,10 @@ func TestDecodeStreamsBeforeEOF(t *testing.T) {
 	consumed := make(chan struct{})
 	go func() {
 		defer writer.Close()
-		io.WriteString(writer, "<HOUSES><HOUSE/>")
+		// Ошибки записи не ожидаются: читатель живёт до конца теста.
+		_, _ = io.WriteString(writer, "<HOUSES><HOUSE/>")
 		<-consumed
-		io.WriteString(writer, "</HOUSES>")
+		_, _ = io.WriteString(writer, "</HOUSES>")
 	}()
 	defer reader.Close()
 	result, err := DecodeXML(context.Background(), reader, gar.KindHouses, 0, func(dec *xml.Decoder, start xml.StartElement) error {

@@ -8,9 +8,10 @@ import (
 	"os"
 	"testing"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+
 	"gar-importer/internal/migrations"
 	"gar-importer/internal/storage"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func sqlOpen(databaseURL string) (*sql.DB, error) { return sql.Open("pgx", databaseURL) }

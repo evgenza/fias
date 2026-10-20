@@ -89,7 +89,8 @@ func (n *node) restriction() (base string, minLen, maxLen, length int, ok bool) 
 		value := 0
 		for _, attr := range facet.attrs {
 			if attr.Name.Local == "value" {
-				fmt.Sscanf(attr.Value, "%d", &value)
+				// В валидных XSD value — целое; при мусоре оставляем 0.
+				_, _ = fmt.Sscanf(attr.Value, "%d", &value)
 			}
 		}
 		switch facet.local() {

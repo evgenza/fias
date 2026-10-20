@@ -10,9 +10,10 @@ import (
 	"io"
 	"strings"
 
-	"gar-importer/internal/gar"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/transform"
+
+	"gar-importer/internal/gar"
 )
 
 type DecodeResult struct {

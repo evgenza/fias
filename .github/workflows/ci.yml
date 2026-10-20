@@ -1,0 +1,171 @@
+# CI платформы ГАР: линтер + юнит-тесты, интеграционные тесты (testcontainers),
+# сквозной smoke всего compose-стека. Запускается на push и PR в любую ветку.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+# Актуальный запуск по ветке отменяет устаревшие (экономия минут и локальность логов).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-test:
+    name: Линтер, vet, юнит-тесты, сборка
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Исходники
+        uses: actions/checkout@v4
+
+      - name: Go (версия из go.mod)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Проверка форматирования (gofmt)
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "Файлы без форматирования gofmt:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go vet (тег integration)
+        run: go vet -tags=integration ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          # Та же версия, что проверена локально (образ golangci/golangci-lint
+          # с golangci-lint 2.15.0, собранный Go 1.27). Action v9 работает
+          # с golangci-lint v2 и конфигом формата v2 (.golangci.yml).
+          version: v2.15.0
+
+      - name: Юнит-тесты
+        run: go test ./...
+
+      - name: Сборка всех пакетов
+        run: go build ./...
+
+  integration:
+    name: Интеграционные тесты (testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Исходники
+        uses: actions/checkout@v4
+
+      - name: Go (версия из go.mod)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Docker на ubuntu-runner есть из коробки, образы подтянутся при прогоне.
+      # -p 1: пакеты последовательно — общий docker и портовые стенды.
+      - name: Интеграционные тесты
+        run: go test -tags=integration -p 1 -timeout 15m ./internal/... ./services/...
+
+  compose-smoke:
+    name: Сквозной smoke compose-стека
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Исходники
+        uses: actions/checkout@v4
+
+      # Go нужен scripts/smoke.sh --with-seed: фикстура генерируется через
+      # go run ./cmd/gar-mkfixture.
+      - name: Go (версия из go.mod)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Buildx для сборки образов
+        uses: docker/setup-buildx-action@v3
+
+      - name: Окружение (.env из примера)
+        run: cp .env.example .env
+
+      # --wait только на long-running сервисах: для one-shot (migrate,
+      # minio-init, kibana-init) `up --wait` на compose v2 падает, поэтому
+      # one-shot сервисы запускаются отдельным шагом ниже.
+      - name: Инфраструктура (postgres, elasticsearch, nats, minio, ...)
+        run: docker compose up -d --build --wait postgres elasticsearch nats minio redis prometheus grafana jaeger kibana
+
+      - name: "One-shot: миграции схемы и бакет MinIO"
+        run: |
+          docker compose up -d --build migrate minio-init
+          # Ждём завершения и проверяем exit-коды через docker inspect:
+          # `docker compose wait` ведёт себя по-разному в compose v2/v5.
+          deadline=$((SECONDS + 180))
+          while :; do
+            done_count=0
+            for svc in migrate minio-init; do
+              cid="$(docker compose ps -aq "$svc")"
+              status="$(docker inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$cid" 2>/dev/null || echo "missing 1")"
+              echo "$svc: $status"
+              case "$status" in
+                "exited 0") done_count=$((done_count + 1));;
+                exited*)    echo "one-shot сервис $svc завершился с ошибкой" >&2; exit 1;;
+              esac
+            done
+            [ "$done_count" -eq 2 ] && break
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "one-shot сервисы не завершились за 180 секунд" >&2
+              exit 1
+            fi
+            sleep 3
+          done
+
+      - name: Сервисы приложения (ожидание healthy)
+        run: |
+          docker compose up -d --build importer indexer suggester address-api
+          # Опрос health через docker inspect: не зависит от формата вывода
+          # `compose ps --format json` (массив/NDJSON различается по версиям).
+          deadline=$((SECONDS + 300))
+          while :; do
+            all_healthy=1
+            for svc in importer indexer suggester address-api; do
+              cid="$(docker compose ps -q "$svc")"
+              status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || echo missing)"
+              echo "$svc: $status"
+              [ "$status" = "healthy" ] || all_healthy=0
+            done
+            [ "$all_healthy" -eq 1 ] && break
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "сервисы не стали healthy за 300 секунд" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
+      # smoke.sh: health/readyz, REST, HTTP/2, метрики Prometheus, затем
+      # полный конвейер на фикстуре: MinIO → NATS → PostgreSQL → Elasticsearch.
+      - name: Smoke-проверка с демо-засевом
+        run: scripts/smoke.sh --with-seed
+
+      - name: Диагностика при падении (статусы и логи)
+        if: failure()
+        run: |
+          docker compose ps
+          for svc in postgres elasticsearch kibana filebeat nats minio redis prometheus grafana jaeger migrate minio-init importer indexer suggester address-api; do
+            echo "===== logs: $svc ====="
+            docker compose logs --tail=50 "$svc" || true
+          done
+
+      - name: Остановка стека и удаление томов
+        if: always()
+        run: docker compose down -v

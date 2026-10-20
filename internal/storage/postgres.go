@@ -9,14 +9,15 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+
 	"gar-importer/ent"
 	"gar-importer/ent/migrate"
 	"gar-importer/internal/config"
 	"gar-importer/internal/control"
 	"gar-importer/internal/gar"
 	"gar-importer/internal/importjob"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
 )
 
 const SchemaName = "gar"

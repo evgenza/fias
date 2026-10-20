@@ -14,8 +14,6 @@ import (
 	"gar-importer/internal/importjob"
 )
 
-const houseDoc = `<?xml version="1.0" encoding="UTF-8"?><HOUSES>%s</HOUSES>`
-
 func house(id int) string {
 	return fmt.Sprintf(`<HOUSE ID="%d" OBJECTID="%d" OBJECTGUID="ab08d8da-ca9c-4a36-953a-6f1ce0d5b28e" CHANGEID="1" HOUSENUM="%d" OPERTYPEID="1" UPDATEDATE="2024-11-23" STARTDATE="2024-11-23" ENDDATE="2024-11-23" ISACTUAL="1" ISACTIVE="1"/>`, id, id, id)
 }

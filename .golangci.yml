@@ -1,0 +1,52 @@
+# Конфигурация golangci-lint (формат v2).
+# Документация: https://golangci-lint.run/docs/configuration/file/
+version: "2"
+
+run:
+  # Линтим и интеграционные тесты (build tag `integration`),
+  # чтобы CI проверял тот же код, что и `make test-integration`.
+  build-tags:
+    - integration
+  timeout: 10m
+
+linters:
+  # Стандартный набор; ничего экзотичного, чтобы CI оставался предсказуемым.
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  exclusions:
+    # Сгенерированный код (ent, protoc) помечен «Code generated ... DO NOT EDIT»;
+    # strict-режим исключает его из анализа полностью.
+    generated: strict
+    # Стандартные пресеты подавляют известные ложные срабатывания:
+    # std-error-handling — errcheck на fmt.Print* и записи в stderr,
+    # common-false-positives/legacy/comments — исторически шумные места.
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    # Сгенерированный код дополнительно исключаем по путям — на случай,
+    # если маркер «Code generated» в каком-то файле отсутствует.
+    paths:
+      - ^ent/
+      - ^proto/.*\.pb\.go$
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      # Группировка импортов: stdlib / сторонние / пакеты этого модуля
+      # (как в большинстве файлов проекта).
+      local-prefixes:
+        - gar-importer
+  exclusions:
+    generated: strict
+    paths:
+      - ^ent/
+      - ^proto/.*\.pb\.go$

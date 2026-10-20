@@ -236,7 +236,8 @@ func (r *Runner) applyVersion(ctx context.Context, version Version, started time
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	// Откат после Commit — no-op (ErrTxDone), ошибка намеренно игнорируется.
+	defer func() { _ = tx.Rollback() }()
 	content, err := os.ReadFile(r.dirPath + "/" + version.Name)
 	if err != nil {
 		return err
