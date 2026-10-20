@@ -41,6 +41,8 @@ func (AdmHierarchyItem) Annotations() []schema.Annotation {
 
 func (AdmHierarchyItem) Indexes() []ent.Index {
 	return []ent.Index{
+		index.Fields("region_code", "object_id").StorageKey("adm_hierarchy_region_object_idx"),
+		index.Fields("object_id", "is_active", "end_date", "id").StorageKey("adm_hierarchy_latest_idx").Annotations(entsql.DescColumns("is_active", "end_date", "id")),
 		index.Fields("object_id").StorageKey("adm_hierarchy_object_id_idx"),
 		index.Fields("parent_obj_id").StorageKey("adm_hierarchy_parent_idx"),
 	}

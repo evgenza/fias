@@ -37,6 +37,7 @@ func (Carplace) Annotations() []schema.Annotation {
 
 func (Carplace) Indexes() []ent.Index {
 	return []ent.Index{
+		index.Fields("object_id", "is_active", "is_actual", "end_date", "id").StorageKey("carplaces_latest_idx").Annotations(entsql.DescColumns("is_active", "is_actual", "end_date", "id")),
 		index.Fields("object_id").StorageKey("carplaces_object_id_idx"),
 	}
 }

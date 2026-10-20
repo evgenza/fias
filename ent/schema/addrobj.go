@@ -39,6 +39,7 @@ func (AddrObj) Annotations() []schema.Annotation {
 
 func (AddrObj) Indexes() []ent.Index {
 	return []ent.Index{
+		index.Fields("object_id", "is_active", "is_actual", "end_date", "id").StorageKey("addr_obj_latest_idx").Annotations(entsql.DescColumns("is_active", "is_actual", "end_date", "id")),
 		index.Fields("object_id").StorageKey("addr_obj_object_id_idx"),
 		index.Fields("level").StorageKey("addr_obj_level_active_idx").Annotations(entsql.IndexWhere("is_actual AND is_active")),
 	}

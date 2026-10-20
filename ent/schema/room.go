@@ -38,6 +38,7 @@ func (Room) Annotations() []schema.Annotation {
 
 func (Room) Indexes() []ent.Index {
 	return []ent.Index{
+		index.Fields("object_id", "is_active", "is_actual", "end_date", "id").StorageKey("rooms_latest_idx").Annotations(entsql.DescColumns("is_active", "is_actual", "end_date", "id")),
 		index.Fields("object_id").StorageKey("rooms_object_id_idx"),
 	}
 }

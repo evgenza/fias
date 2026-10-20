@@ -51,6 +51,22 @@ var (
 		PrimaryKey: []*schema.Column{AddrObjColumns[0]},
 		Indexes: []*schema.Index{
 			{
+				Name:    "addr_obj_latest_idx",
+				Unique:  false,
+				Columns: []*schema.Column{AddrObjColumns[1], AddrObjColumns[14], AddrObjColumns[13], AddrObjColumns[12], AddrObjColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						AddrObjColumns[12].Name: true,
+
+						AddrObjColumns[0].Name: true,
+
+						AddrObjColumns[14].Name: true,
+
+						AddrObjColumns[13].Name: true,
+					},
+				},
+			},
+			{
 				Name:    "addr_obj_object_id_idx",
 				Unique:  false,
 				Columns: []*schema.Column{AddrObjColumns[1]},
@@ -142,6 +158,25 @@ var (
 		PrimaryKey: []*schema.Column{AdmHierarchyColumns[0]},
 		Indexes: []*schema.Index{
 			{
+				Name:    "adm_hierarchy_region_object_idx",
+				Unique:  false,
+				Columns: []*schema.Column{AdmHierarchyColumns[4], AdmHierarchyColumns[1]},
+			},
+			{
+				Name:    "adm_hierarchy_latest_idx",
+				Unique:  false,
+				Columns: []*schema.Column{AdmHierarchyColumns[1], AdmHierarchyColumns[15], AdmHierarchyColumns[14], AdmHierarchyColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						AdmHierarchyColumns[14].Name: true,
+
+						AdmHierarchyColumns[0].Name: true,
+
+						AdmHierarchyColumns[15].Name: true,
+					},
+				},
+			},
+			{
 				Name:    "adm_hierarchy_object_id_idx",
 				Unique:  false,
 				Columns: []*schema.Column{AdmHierarchyColumns[1]},
@@ -176,6 +211,22 @@ var (
 		Columns:    ApartmentsColumns,
 		PrimaryKey: []*schema.Column{ApartmentsColumns[0]},
 		Indexes: []*schema.Index{
+			{
+				Name:    "apartments_latest_idx",
+				Unique:  false,
+				Columns: []*schema.Column{ApartmentsColumns[1], ApartmentsColumns[13], ApartmentsColumns[12], ApartmentsColumns[11], ApartmentsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						ApartmentsColumns[11].Name: true,
+
+						ApartmentsColumns[0].Name: true,
+
+						ApartmentsColumns[13].Name: true,
+
+						ApartmentsColumns[12].Name: true,
+					},
+				},
+			},
 			{
 				Name:    "apartments_object_id_idx",
 				Unique:  false,
@@ -222,6 +273,22 @@ var (
 		Columns:    CarplacesColumns,
 		PrimaryKey: []*schema.Column{CarplacesColumns[0]},
 		Indexes: []*schema.Index{
+			{
+				Name:    "carplaces_latest_idx",
+				Unique:  false,
+				Columns: []*schema.Column{CarplacesColumns[1], CarplacesColumns[12], CarplacesColumns[11], CarplacesColumns[10], CarplacesColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						CarplacesColumns[10].Name: true,
+
+						CarplacesColumns[0].Name: true,
+
+						CarplacesColumns[12].Name: true,
+
+						CarplacesColumns[11].Name: true,
+					},
+				},
+			},
 			{
 				Name:    "carplaces_object_id_idx",
 				Unique:  false,
@@ -278,6 +345,22 @@ var (
 		Columns:    HousesColumns,
 		PrimaryKey: []*schema.Column{HousesColumns[0]},
 		Indexes: []*schema.Index{
+			{
+				Name:    "houses_latest_idx",
+				Unique:  false,
+				Columns: []*schema.Column{HousesColumns[1], HousesColumns[17], HousesColumns[16], HousesColumns[15], HousesColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						HousesColumns[15].Name: true,
+
+						HousesColumns[0].Name: true,
+
+						HousesColumns[17].Name: true,
+
+						HousesColumns[16].Name: true,
+					},
+				},
+			},
 			{
 				Name:    "houses_object_id_idx",
 				Unique:  false,
@@ -509,6 +592,22 @@ var (
 		PrimaryKey: []*schema.Column{RoomsColumns[0]},
 		Indexes: []*schema.Index{
 			{
+				Name:    "rooms_latest_idx",
+				Unique:  false,
+				Columns: []*schema.Column{RoomsColumns[1], RoomsColumns[13], RoomsColumns[12], RoomsColumns[11], RoomsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						RoomsColumns[11].Name: true,
+
+						RoomsColumns[0].Name: true,
+
+						RoomsColumns[13].Name: true,
+
+						RoomsColumns[12].Name: true,
+					},
+				},
+			},
+			{
 				Name:    "rooms_object_id_idx",
 				Unique:  false,
 				Columns: []*schema.Column{RoomsColumns[1]},
@@ -554,6 +653,22 @@ var (
 		Columns:    SteadsColumns,
 		PrimaryKey: []*schema.Column{SteadsColumns[0]},
 		Indexes: []*schema.Index{
+			{
+				Name:    "steads_latest_idx",
+				Unique:  false,
+				Columns: []*schema.Column{SteadsColumns[1], SteadsColumns[12], SteadsColumns[11], SteadsColumns[10], SteadsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						SteadsColumns[10].Name: true,
+
+						SteadsColumns[0].Name: true,
+
+						SteadsColumns[12].Name: true,
+
+						SteadsColumns[11].Name: true,
+					},
+				},
+			},
 			{
 				Name:    "steads_object_id_idx",
 				Unique:  false,

@@ -258,7 +258,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Готово, когда:** `go test -race` с параллельными `DescribeObject` чистый;
   тест «пустые справочники → импорт справочников → типы появились».
 
-### [ ] C2. Пересборка региона сканирует таблицы всей страны — Critical
+### [x] C2. Пересборка региона сканирует таблицы всей страны — Critical
 - **Файлы:** `internal/address/builder.go` (~26–91, 294–318), новая миграция
   индексов (`migrations/atlas`, `ent/schema`).
 - **Проблема:**
@@ -650,3 +650,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | B3 | [x] | Ready-run проверяется под dataset lock с учётом отбора; digest в Msg-Id. Регрессия до исправления: два run/события, после: один. Build/vet/lint/unit прошли; общая integration-проверка запущена. Архив скачивается для проверки криптографического digest. |
 
 | 2026-10-20 | B4 | [x] | Дизайн в decisions: snapshot/delta, версии, проверка base/applied, резерв digest, последовательный retry и MaxAckPending=1. Upsert защищён update_date, Ent регенерирован. D2→D1, старый snapshot, пропуск выпуска и старая строка отвергаются. Build/vet/lint/unit и PostgreSQL-регрессии прошли; общая integration будет повторена после волны. |
+
+| 2026-10-20 | C2 | [x] | Региональные object_id → LATERAL latest, keyset по 2000 с закрытием rows до обогащения/sink; безопасный CASE и индексы в Ent/миграции. Тест с одним соединением падал на deadline, теперь 2001 дом/2 страницы с прежними адресами; EXPLAIN без Seq Scan houses/adm_hierarchy на 50k посторонних строк. Build/vet/lint/unit и PostgreSQL-тест прошли. |

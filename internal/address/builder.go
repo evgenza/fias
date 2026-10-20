@@ -26,70 +26,62 @@ const hierarchyTable = "gar.adm_hierarchy"
 // (действующая предпочтительнее исторических).
 const hierarchySelect = `SELECT DISTINCT ON (h.object_id) h.object_id, h.path, h.region_code
 FROM ` + hierarchyTable + ` h
-WHERE h.region_code ~ '^[0-9]+$' AND h.region_code::int = $1
+WHERE h.region_code IN (($1::int)::text, lpad(($1::int)::text,2,'0'), lpad(($1::int)::text,3,'0'), lpad(($1::int)::text,4,'0'))
+ AND CASE WHEN h.region_code ~ '^[0-9]+$' THEN h.region_code::int END = $1::int
+ AND h.object_id > $2
 ORDER BY h.object_id, h.is_active DESC, h.end_date DESC, h.id DESC`
 
-// Запросы объектов по видам: собственная запись (одна на object_id,
-// действующая предпочтительнее), иерархия региона и уровень из реестра.
+// Regional IDs drive indexed point lookups; the limit bounds each database cursor.
 const (
 	addrObjQuery = `SELECT o.object_id, o.object_guid::text, o.name, o.type_name, o.level,
-       o.is_actual, o.is_active, h.path, h.region_code, r.level_id
-FROM (SELECT DISTINCT ON (object_id) object_id, object_guid, name, type_name, level, is_actual, is_active
-      FROM gar.addr_obj
-      ORDER BY object_id, is_active DESC, is_actual DESC, end_date DESC, id DESC) o
-JOIN (` + hierarchySelect + `) h ON h.object_id = o.object_id
-LEFT JOIN gar.reestr_objects r ON r.object_id = o.object_id
-ORDER BY o.object_id`
+ o.is_actual, o.is_active, h.path, h.region_code, r.level_id
+FROM (` + hierarchySelect + `) h
+JOIN LATERAL (SELECT object_id, object_guid, name, type_name, level, is_actual, is_active FROM gar.addr_obj
+ WHERE object_id = h.object_id
+ ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
+LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+ORDER BY o.object_id LIMIT $3`
 
 	housesQuery = `SELECT o.object_id, o.object_guid::text, o.house_num, o.house_type,
-       o.add_num1, o.add_type1, o.add_num2, o.add_type2,
-       o.is_actual, o.is_active, h.path, h.region_code, r.level_id
-FROM (SELECT DISTINCT ON (object_id) object_id, object_guid, house_num,
-             house_type::text AS house_type,
-             add_num1, add_type1::text AS add_type1,
-             add_num2, add_type2::text AS add_type2,
-             is_actual, is_active
-      FROM gar.houses
-      ORDER BY object_id, is_active DESC, is_actual DESC, end_date DESC, id DESC) o
-JOIN (` + hierarchySelect + `) h ON h.object_id = o.object_id
-LEFT JOIN gar.reestr_objects r ON r.object_id = o.object_id
-ORDER BY o.object_id`
+ o.add_num1, o.add_type1, o.add_num2, o.add_type2, o.is_actual, o.is_active, h.path, h.region_code, r.level_id
+FROM (` + hierarchySelect + `) h
+JOIN LATERAL (SELECT object_id, object_guid, house_num, house_type::text AS house_type, add_num1, add_type1::text AS add_type1, add_num2, add_type2::text AS add_type2, is_actual, is_active FROM gar.houses
+ WHERE object_id = h.object_id
+ ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
+LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+ORDER BY o.object_id LIMIT $3`
 
-	apartmentsQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.apart_type,
-       o.is_actual, o.is_active, h.path, h.region_code, r.level_id
-FROM (SELECT DISTINCT ON (object_id) object_id, object_guid, number, apart_type, is_actual, is_active
-      FROM gar.apartments
-      ORDER BY object_id, is_active DESC, is_actual DESC, end_date DESC, id DESC) o
-JOIN (` + hierarchySelect + `) h ON h.object_id = o.object_id
-LEFT JOIN gar.reestr_objects r ON r.object_id = o.object_id
-ORDER BY o.object_id`
+	apartmentsQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.apart_type, o.is_actual, o.is_active, h.path, h.region_code, r.level_id
+FROM (` + hierarchySelect + `) h
+JOIN LATERAL (SELECT object_id, object_guid, number, apart_type, is_actual, is_active FROM gar.apartments
+ WHERE object_id = h.object_id
+ ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
+LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+ORDER BY o.object_id LIMIT $3`
 
-	roomsQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.room_type,
-       o.is_actual, o.is_active, h.path, h.region_code, r.level_id
-FROM (SELECT DISTINCT ON (object_id) object_id, object_guid, number, room_type, is_actual, is_active
-      FROM gar.rooms
-      ORDER BY object_id, is_active DESC, is_actual DESC, end_date DESC, id DESC) o
-JOIN (` + hierarchySelect + `) h ON h.object_id = o.object_id
-LEFT JOIN gar.reestr_objects r ON r.object_id = o.object_id
-ORDER BY o.object_id`
+	roomsQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.room_type, o.is_actual, o.is_active, h.path, h.region_code, r.level_id
+FROM (` + hierarchySelect + `) h
+JOIN LATERAL (SELECT object_id, object_guid, number, room_type, is_actual, is_active FROM gar.rooms
+ WHERE object_id = h.object_id
+ ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
+LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+ORDER BY o.object_id LIMIT $3`
 
-	steadsQuery = `SELECT o.object_id, o.object_guid::text, o.number,
-       o.is_actual, o.is_active, h.path, h.region_code, r.level_id
-FROM (SELECT DISTINCT ON (s.object_id) s.object_id::bigint AS object_id, s.object_guid, s.number, s.is_actual, s.is_active
-      FROM gar.steads s
-      ORDER BY s.object_id, s.is_active DESC, s.is_actual DESC, s.end_date DESC, s.id DESC) o
-JOIN (` + hierarchySelect + `) h ON h.object_id = o.object_id
-LEFT JOIN gar.reestr_objects r ON r.object_id = o.object_id
-ORDER BY o.object_id`
+	steadsQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.is_actual, o.is_active, h.path, h.region_code, r.level_id
+FROM (` + hierarchySelect + `) h
+JOIN LATERAL (SELECT object_id::bigint AS object_id, object_guid, number, is_actual, is_active FROM gar.steads
+ WHERE object_id = h.object_id
+ ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
+LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+ORDER BY o.object_id LIMIT $3`
 
-	carplacesQuery = `SELECT o.object_id, o.object_guid::text, o.number,
-       o.is_actual, o.is_active, h.path, h.region_code, r.level_id
-FROM (SELECT DISTINCT ON (object_id) object_id, object_guid, number, is_actual, is_active
-      FROM gar.carplaces
-      ORDER BY object_id, is_active DESC, is_actual DESC, end_date DESC, id DESC) o
-JOIN (` + hierarchySelect + `) h ON h.object_id = o.object_id
-LEFT JOIN gar.reestr_objects r ON r.object_id = o.object_id
-ORDER BY o.object_id`
+	carplacesQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.is_actual, o.is_active, h.path, h.region_code, r.level_id
+FROM (` + hierarchySelect + `) h
+JOIN LATERAL (SELECT object_id, object_guid, number, is_actual, is_active FROM gar.carplaces
+ WHERE object_id = h.object_id
+ ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
+LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+ORDER BY o.object_id LIMIT $3`
 )
 
 // Запросы предков для обогащения пачки: по одной записи на object_id.
@@ -294,32 +286,40 @@ func numberScanner(types map[int64]string, fallback, kind string, region int) fu
 // в sink после обогащения предками.
 func (b *Builder) stream(ctx context.Context, region int, kind, query string,
 	scan func(*sql.Rows) (rawObject, error), sink func([]search.Document) error) error {
-	rows, err := b.store.SQL().QueryContext(ctx, query, region)
-	if err != nil {
-		return fmt.Errorf("address: выборка %s региона %d: %w", kind, region, err)
-	}
-	defer rows.Close()
-	batch := make([]rawObject, 0, BatchSize)
-	for rows.Next() {
-		obj, err := scan(rows)
+	var after int64
+	for {
+		rows, err := b.store.SQL().QueryContext(ctx, query, region, after, BatchSize)
+		if err != nil {
+			return fmt.Errorf("address: выборка %s региона %d: %w", kind, region, err)
+		}
+		batch := make([]rawObject, 0, BatchSize)
+		err = each(rows, func() error {
+			obj, err := scan(rows)
+			if err != nil {
+				return err
+			}
+			batch = append(batch, obj)
+			return nil
+		})
 		if err != nil {
 			return fmt.Errorf("address: чтение %s региона %d: %w", kind, region, err)
 		}
-		batch = append(batch, obj)
-		if len(batch) == BatchSize {
-			if err := b.flush(ctx, region, kind, batch, sink); err != nil {
-				return err
-			}
-			batch = batch[:0]
+		// each closes rows before enrichment and the potentially slow Elasticsearch sink.
+		if len(batch) == 0 {
+			return nil
+		}
+		after, err = strconv.ParseInt(batch[len(batch)-1].doc.ObjectID, 10, 64)
+		if err != nil {
+			return err
+		}
+		if err := b.flush(ctx, region, kind, batch, sink); err != nil {
+			return err
+		}
+		if len(batch) < BatchSize {
+			return nil
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("address: выборка %s региона %d: %w", kind, region, err)
-	}
-	if len(batch) > 0 {
-		return b.flush(ctx, region, kind, batch, sink)
-	}
-	return nil
+
 }
 
 // flush обогащает пачку предками, собирает адресные строки и отдаёт документы.
