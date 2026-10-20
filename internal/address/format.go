@@ -7,7 +7,8 @@
 // элемента — «тип наименование», для домов — основной тип и номер плюс
 // дополнительные типы и номера (корпус, строение); элементы иерархии
 // соединяются разделителем «, ». В индекс пишутся сокращённые типы
-// («г Москва, ул Тверская, д 7»).
+// («г Москва, ул Тверская, д 7»); действующее официальное наименование
+// для уровней 1, 3, 4 заменяет сочетание типа и наименования.
 package address
 
 import (
@@ -19,8 +20,6 @@ const (
 	defaultHouseType     = "д"
 	defaultApartmentType = "кв"
 	defaultRoomType      = "ком"
-	defaultSteadType     = "уч"
-	defaultCarplaceType  = "м/м"
 )
 
 // Component — один элемент адресной строки: сокращённый тип и наименование
@@ -88,15 +87,22 @@ func (p NumberedPart) String() string {
 
 // HouseComponent — элемент дома по правилу руководства: основной тип и номер,
 // затем дополнительные типы и номера при наличии: «д 7 к 1 стр 2».
-// Пустой основной тип заменяется на «д».
+// При наличии основного номера пустой тип заменяется на «д».
 func HouseComponent(num, houseType string, add1, add2 NumberedPart) Component {
 	short := NormalizeShortType(houseType)
-	if short == "" {
+	if strings.TrimSpace(num) == "" {
+		short = ""
+	} else if short == "" {
 		short = defaultHouseType
 	}
 	name := strings.TrimSpace(num)
 	for _, add := range []NumberedPart{add1, add2} {
 		if text := add.String(); text != "" {
+			if name == "" {
+				short = NormalizeShortType(add.Type)
+				name = strings.TrimSpace(add.Num)
+				continue
+			}
 			if name != "" {
 				name += " "
 			}
@@ -114,4 +120,14 @@ func NumberComponent(typeShort, fallback, number string) Component {
 		short = fallback
 	}
 	return Component{Type: short, Name: strings.TrimSpace(number)}
+}
+
+// houseName is the first available number, without its type.
+func houseName(numbers ...string) string {
+	for _, n := range numbers {
+		if n = strings.TrimSpace(n); n != "" {
+			return n
+		}
+	}
+	return ""
 }

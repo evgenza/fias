@@ -301,3 +301,25 @@ Address analyzers normalize yo to e without stopwords; prefix ngrams cover 1..20
 Hierarchy is resolved across regions before checking the requested region. Inactive/non-actual objects are excluded. A successful regional kind rebuild refreshes Elasticsearch and deletes older documents of that region and kind. Failed builds skip cleanup; delete_by_query timeouts, conflicts and failures fail the event.
 
 Wave 2 verification: build/vet/lint/unit and full integration passed. Preview events include sample_limit in Msg-Id to preserve the subsequent full-import event. Ready archive skips are logged. source_release protects data loaded by partial imports; only full imports advance applied_release.
+
+## C7. Правила формирования адресной строки (2026-10-20)
+
+- Тип дома выводится только вместе с соответствующим номером. Если HOUSENUM
+  отсутствует, строка начинается с первого дополнительного номера и его типа;
+  поле Name содержит первый непустой номер, TypeName — соответствующий тип.
+- В адресной строке объектов уровней 1, 3, 4 и их потомков используется действующий
+  TYPEID=16 из AS_ADDR_OBJ_PARAMS. Проверяются начало и окончание действия;
+  исторические, будущие и параметры других семейств не подменяют адрес.
+  Без действующего параметра сохраняется сочетание сокращённого типа и имени.
+- При отсутствии REGIONCODE регион определяется по записи корня PATH в
+  административной иерархии. Если административных записей объекта нет,
+  используется его актуальная муниципальная иерархия. При наличии обеих
+  административная имеет приоритет; документы не дублируются. Нужен известный
+  REGIONCODE самого объекта либо корня: OBJECTID в PATH не является кодом региона.
+- Типы участков и машино-мест читаются из действующих ADDR_OBJ_TYPES уровней 9
+  и 17. Если справочник отсутствует, выводится номер без выдуманного типа.
+  Изменение справочника инвалидирует кэш; события MUN_HIERARCHY пересобирают
+  все виды адресов, поскольку муниципальные пути теперь участвуют в индексации.
+- Правила одинаковы для поисковых документов и DescribeObject. Golden-регрессии
+  проверяют пример адреса комнаты из руководства ФНС, дом без основного номера,
+  муниципальный участок, приоритет иерархий и сроки официальных наименований.

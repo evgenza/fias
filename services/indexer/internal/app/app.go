@@ -177,7 +177,7 @@ func (s *service) handle(ctx context.Context, msg events.ObjectsChangedMsg) {
 	// пересборка не требуется (задел на будущее).
 	if event.Region == 0 {
 		switch gar.Kind(event.Kind) {
-		case gar.KindHouseTypes, gar.KindAddHouseTypes, gar.KindApartmentTypes, gar.KindRoomTypes:
+		case gar.KindHouseTypes, gar.KindAddHouseTypes, gar.KindApartmentTypes, gar.KindRoomTypes, gar.KindAddrObjTypes:
 			s.builder.InvalidateDictionaries()
 		}
 		log.Debug("корневой справочник, индексация не требуется")
@@ -254,7 +254,7 @@ func (s *service) routeTasks(kind gar.Kind) ([]buildTask, bool) {
 	case gar.KindCarplaces:
 		return all[5:6], true
 	case gar.KindMunHierarchy:
-		return nil, true
+		return all, true
 	case gar.KindAdmHierarchy:
 		// Иерархия меняет адресные строки всех видов объектов региона.
 		return all, true

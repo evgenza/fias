@@ -21,12 +21,12 @@ func TestComponents(t *testing.T) {
 			NumberedPart{Num: "6", Type: "корпус"}, NumberedPart{Num: "2", Type: "стр"}),
 			"д 7 корпус 6 стр 2"},
 		{"дом только с корпусом", HouseComponent("", "влд",
-			NumberedPart{Num: "1", Type: "к"}, NumberedPart{}), "влд к 1"},
+			NumberedPart{Num: "1", Type: "к"}, NumberedPart{}), "к 1"},
 		{"квартира", NumberComponent("кв.", defaultApartmentType, "10"), "кв 10"},
 		{"квартира без типа", NumberComponent("", defaultApartmentType, "17"), "кв 17"},
 		{"комната", NumberComponent("ком", defaultRoomType, "2"), "ком 2"},
-		{"участок", NumberComponent("", defaultSteadType, "12"), "уч 12"},
-		{"машино-место", NumberComponent("", defaultCarplaceType, "34"), "м/м 34"},
+		{"участок", NumberComponent("уч", "", "12"), "уч 12"},
+		{"машино-место", NumberComponent("м/м", "", "34"), "м/м 34"},
 		{"без типа", Component{Name: "Москва"}, "Москва"},
 		{"пустой", Component{}, ""},
 	}
@@ -81,5 +81,18 @@ func TestParsePath(t *testing.T) {
 	// Мусорные токены пропускаются.
 	if ids := parsePath("1..x.3"); len(ids) != 2 || ids[0] != 1 || ids[1] != 3 {
 		t.Fatalf("got %v", ids)
+	}
+}
+
+func TestHouseWithoutMainNumber(t *testing.T) {
+	for _, tc := range []struct{ num, typ, a, b, want string }{
+		{"", "", "1", "", "к 1"},
+		{" ", "д", "", "2", "стр 2"},
+		{"", "д", "", "", ""},
+	} {
+		got := HouseComponent(tc.num, tc.typ, NumberedPart{Num: tc.a, Type: "к"}, NumberedPart{Num: tc.b, Type: "стр"}).String()
+		if got != tc.want {
+			t.Errorf("got %q, want %q", got, tc.want)
+		}
 	}
 }

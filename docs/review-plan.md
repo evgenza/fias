@@ -344,7 +344,7 @@ suggester, инфраструктура и CI. Находки сверены с 
   - сначала одна действующая запись иерархии на объект, затем фильтр по региону;
   - после пересборки `delete_by_query` по `region` и `indexed_at < start`.
 
-### [ ] C7. Формирование адресной строки по правилам из docs — Medium
+### [x] C7. Формирование адресной строки по правилам из docs — Medium
 - **Зависимости:** C1; для пункта о параметре 16 — C3 (маршрутизация `AS_PARAM`).
 - **Файлы:** `internal/address/format.go` (~22, 66–68, 92–107),
   `internal/address/builder.go` (~26–29, 39, 159, 205), тесты `format_test.go`.
@@ -658,3 +658,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | C6 | [x] | Resolve current hierarchy globally before region filtering; index active/actual records. After a successful regional kind rebuild: refresh + delete_by_query by region/kind/indexed_at. Moved/inactive regressions and E2E deletion pass; cleanup failures propagate. |
 
 | 2026-10-20 | Wave 2 | [x] | B3/B4/C2/C3/C6: build, make vet, golangci-lint, unit and full make test-integration passed with isolated PostgreSQL. Final release/Msg-Id changes additionally verified by importjob/worker integration and build/vet/lint/unit. Both GAR generators -verify are clean. |
+
+| 2026-10-20 | C7 | [x] | Волна 3: дом без HOUSENUM, Name/TypeName по первому номеру; действующий PARAM 16 уровней 1/3/4, регион из корня PATH при отсутствии REGIONCODE, MUN fallback и маршрутизация; типы уровней 9/17 из ADDR_OBJ_TYPES. Регрессии сначала воспроизведены; golden примера комнаты из руководства, build/vet/lint/unit и полный integration с отдельной PostgreSQL прошли. |

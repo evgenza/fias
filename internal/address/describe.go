@@ -75,13 +75,15 @@ WHERE o.object_id = $1
 ORDER BY o.is_active DESC, o.is_actual DESC, o.end_date DESC, o.id DESC
 LIMIT 1`
 
-	// describeHierarchyQuery — запись административной иерархии объекта
+	// describeHierarchyQuery — административная иерархия или муниципальная при её отсутствии
 	// (действующая предпочтительнее, как hierarchySelect в builder.go).
-	describeHierarchyQuery = `SELECT h.parent_obj_id, h.path, h.region_code
-FROM gar.adm_hierarchy h
-WHERE h.object_id = $1
-ORDER BY h.is_active DESC, h.end_date DESC, h.id DESC
-LIMIT 1`
+	describeHierarchyQuery = `SELECT h.parent_obj_id,h.path,COALESCE(NULLIF(h.region_code,''),root.region_code)
+ FROM (SELECT parent_obj_id,path,region_code FROM (
+ SELECT parent_obj_id,path,region_code,is_active,end_date,id,0 AS priority FROM gar.adm_hierarchy WHERE object_id=$1
+ UNION ALL
+ SELECT parent_obj_id,path,NULL::text,is_active,end_date,id,1 FROM gar.mun_hierarchy WHERE object_id=$1
+ ) versions ORDER BY priority,is_active DESC,end_date DESC,id DESC LIMIT 1) h
+ ` + rootRegionJoin
 
 	// describeReestrQuery — уровень объекта из реестра.
 	describeReestrQuery = `SELECT r.level_id FROM gar.reestr_objects r WHERE r.object_id = $1`
@@ -141,9 +143,18 @@ func (b *Builder) DescribeObject(ctx context.Context, objectID int64) (*Descript
 	}
 	desc.Level = resolveLevel(reestrLevel, desc.levelFallback)
 
-	ancestors, err := b.loadAncestors(ctx, parsePath(path))
+	ids := parsePath(path)
+	if desc.Kind == search.KindAddrObj {
+		ids = append(ids, objectID)
+	}
+	ancestors, err := b.loadAncestors(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("address: предки объекта %d: %w", objectID, err)
+	}
+	if desc.Kind == search.KindAddrObj {
+		if component, ok := ancestors[objectID]; ok {
+			self = component
+		}
 	}
 	raw := rawObject{path: path, self: self}
 	raw.doc.ObjectID = strconv.FormatInt(objectID, 10)
@@ -229,7 +240,7 @@ func (b *Builder) loadOwnRecord(ctx context.Context, objectID int64) (Component,
 		add2 := NumberedPart{Num: addNum2.String, Type: dicts.addHouseTypes[parseTypeID(addType2)]}
 		self := HouseComponent(num.String, dicts.houseTypes[parseTypeID(houseType)], add1, add2)
 		desc.Kind = search.KindHouse
-		desc.Name = strings.TrimSpace(num.String)
+		desc.Name = houseName(num.String, addNum1.String, addNum2.String)
 		desc.TypeName = self.Type
 		return self, desc, nil
 	case !errors.Is(err, sql.ErrNoRows):
@@ -246,13 +257,13 @@ func (b *Builder) loadOwnRecord(ctx context.Context, objectID int64) (Component,
 		return self, desc, err
 	}
 
-	// steads и carplaces: простой номер без справочника типов.
+	// steads и carplaces: тип по уровню из ADDR_OBJ_TYPES.
 	if self, found, err := b.loadNumbered(ctx, objectID, describeSteadsQuery,
-		search.KindStead, defaultSteadType, false, desc); err != nil || found {
+		search.KindStead, "", false, desc); err != nil || found {
 		return self, desc, err
 	}
 	if self, found, err := b.loadNumbered(ctx, objectID, describeCarplacesQuery,
-		search.KindCarplace, defaultCarplaceType, false, desc); err != nil || found {
+		search.KindCarplace, "", false, desc); err != nil || found {
 		return self, desc, err
 	}
 	return Component{}, nil, fmt.Errorf("%w: object_id %d", ErrNotFound, objectID)
@@ -281,6 +292,18 @@ func (b *Builder) loadNumbered(ctx context.Context, objectID int64, query, kind,
 		return Component{}, false, fmt.Errorf("address: %s %d: %w", kind, objectID, err)
 	}
 	typeShort := ""
+	if !withType {
+		dicts, err := b.dictionaries(ctx)
+		if err != nil {
+			return Component{}, false, err
+		}
+		if kind == search.KindStead {
+			fallback = dicts.levelTypes[9]
+		}
+		if kind == search.KindCarplace {
+			fallback = dicts.levelTypes[17]
+		}
+	}
 	if withType {
 		dicts, err := b.dictionaries(ctx)
 		if err != nil {

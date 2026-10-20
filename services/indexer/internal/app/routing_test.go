@@ -19,7 +19,7 @@ func TestRoutingDependencies(t *testing.T) {
 		{gar.KindHouses, []string{"house", "apartment", "room", "carplace"}},
 		{gar.KindApartments, []string{"apartment", "room"}},
 		{gar.KindParam, []string{"addr_obj", "house", "apartment", "room", "stead", "carplace"}},
-		{gar.KindMunHierarchy, nil},
+		{gar.KindMunHierarchy, []string{"addr_obj", "house", "apartment", "room", "stead", "carplace"}},
 	} {
 		tasks, known := s.routeTasks(tc.kind)
 		if !known {

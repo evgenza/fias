@@ -16,22 +16,32 @@ import (
 // BatchSize — число объектов в одной пачке документов, передаваемой в sink.
 const BatchSize = 2000
 
-// Иерархия для построения адресных строк: административная (adm_hierarchy).
-// По руководству ГАР PATH есть в обеих иерархиях и содержит полную цепочку
-// OBJECTID предков включая сам объект; adm_hierarchy даёт адрес в
-// административно-территориальном делении (как в примерах контракта).
-const hierarchyTable = "gar.adm_hierarchy"
+// Administrative paths take precedence; municipal paths cover objects without
+// an administrative record. Missing REGIONCODE is resolved through the PATH root.
+const rootRegionJoin = ` LEFT JOIN LATERAL (
+ SELECT region_code FROM gar.adm_hierarchy
+ WHERE object_id = CASE WHEN split_part(h.path,'.',1) ~ '^[0-9]+$'
+ THEN split_part(h.path,'.',1)::bigint END
+ ORDER BY is_active DESC, end_date DESC, id DESC LIMIT 1
+) root ON true `
 
-// hierarchySelect resolves the current hierarchy globally, then checks its region.
-// Regional historical IDs are only candidates for indexed point lookups.
-const hierarchySelect = `SELECT h.object_id, h.path, h.region_code
-FROM (SELECT DISTINCT object_id FROM ` + hierarchyTable + `
- WHERE region_code IN (($1::int)::text, lpad(($1::int)::text,2,'0'), lpad(($1::int)::text,3,'0'), lpad(($1::int)::text,4,'0'))
- AND object_id > $2) candidates
-JOIN LATERAL (SELECT object_id, path, region_code, is_active FROM ` + hierarchyTable + `
- WHERE object_id=candidates.object_id
- ORDER BY is_active DESC, end_date DESC, id DESC LIMIT 1) h ON true
-WHERE h.is_active AND CASE WHEN h.region_code ~ '^[0-9]+$' THEN h.region_code::int END = $1::int`
+const hierarchySelect = `SELECT h.object_id, h.path, COALESCE(NULLIF(h.region_code,''),root.region_code) AS region_code
+FROM (
+ SELECT DISTINCT object_id FROM gar.adm_hierarchy
+ WHERE object_id > $2 AND (region_code IN (($1::int)::text, lpad(($1::int)::text,2,'0'), lpad(($1::int)::text,3,'0'), lpad(($1::int)::text,4,'0'))
+ OR region_code IS NULL OR region_code='')
+ UNION SELECT object_id FROM gar.mun_hierarchy WHERE object_id > $2
+) candidates
+JOIN LATERAL (
+ SELECT object_id,path,region_code,is_active FROM (
+ SELECT object_id,path,region_code,is_active,end_date,id,0 AS priority FROM gar.adm_hierarchy WHERE object_id=candidates.object_id
+ UNION ALL
+ SELECT object_id,path,NULL::text,is_active,end_date,id,1 FROM gar.mun_hierarchy WHERE object_id=candidates.object_id
+ ) versions ORDER BY priority, is_active DESC,end_date DESC,id DESC LIMIT 1
+) h ON true
+` + rootRegionJoin + `
+WHERE h.is_active AND CASE WHEN COALESCE(NULLIF(h.region_code,''),root.region_code) ~ '^[0-9]+$'
+ THEN COALESCE(NULLIF(h.region_code,''),root.region_code)::int END = $1::int`
 
 // Regional IDs drive indexed point lookups; the limit bounds each database cursor.
 const (
@@ -94,10 +104,16 @@ ORDER BY o.object_id LIMIT $3`
 
 // Запросы предков для обогащения пачки: по одной записи на object_id.
 const (
-	ancestorAddrObjQuery = `SELECT DISTINCT ON (object_id) object_id, name, type_name
-FROM gar.addr_obj
-WHERE object_id = ANY($1)
-ORDER BY object_id, is_active DESC, is_actual DESC, end_date DESC, id DESC`
+	ancestorAddrObjQuery = `SELECT o.object_id,o.name,o.type_name,p.value
+FROM (SELECT DISTINCT ON (object_id) object_id,name,type_name,level
+ FROM gar.addr_obj WHERE object_id=ANY($1)
+ ORDER BY object_id,is_active DESC,is_actual DESC,end_date DESC,id DESC) o
+LEFT JOIN gar.reestr_objects r ON r.object_id=o.object_id
+LEFT JOIN LATERAL (SELECT value FROM gar.param
+ WHERE object_id=o.object_id AND type_id=16 AND source='AS_ADDR_OBJ_PARAMS'
+ AND start_date <= CURRENT_DATE AND end_date > CURRENT_DATE AND btrim(value)<>''
+ ORDER BY start_date DESC,update_date DESC,id DESC LIMIT 1) p
+ ON COALESCE(r.level_id::text,o.level) IN ('1','3','4')`
 
 	ancestorHousesQuery = `SELECT DISTINCT ON (object_id) object_id, house_num,
        house_type::text AS house_type, add_num1, add_type1::text AS add_type1,
@@ -118,6 +134,7 @@ type dictionaries struct {
 	addHouseTypes map[int64]string
 	apartTypes    map[int64]string
 	roomTypes     map[int64]string
+	levelTypes    map[int64]string
 }
 
 // Builder строит поисковые документы адресов по данным PostgreSQL.
@@ -205,7 +222,7 @@ func (b *Builder) BuildHouses(ctx context.Context, region int, sink func([]searc
 				ObjectID:   strconv.FormatInt(objectID, 10),
 				ObjectGUID: guid,
 				Kind:       search.KindHouse,
-				Name:       strings.TrimSpace(num.String),
+				Name:       houseName(num.String, addNum1.String, addNum2.String),
 				TypeName:   obj.self.Type,
 				Region:     normalizeRegion(regionCode, region),
 				Level:      resolveLevel(reestrLevel, ""),
@@ -238,14 +255,22 @@ func (b *Builder) BuildRooms(ctx context.Context, region int, sink func([]search
 
 // BuildSteads строит документы земельных участков региона.
 func (b *Builder) BuildSteads(ctx context.Context, region int, sink func([]search.Document) error) error {
+	dicts, err := b.dictionaries(ctx)
+	if err != nil {
+		return err
+	}
 	return b.stream(ctx, region, search.KindStead, steadsQuery,
-		numberScanner(nil, defaultSteadType, search.KindStead, region), sink)
+		numberScanner(nil, dicts.levelTypes[9], search.KindStead, region), sink)
 }
 
 // BuildCarplaces строит документы машино-мест региона.
 func (b *Builder) BuildCarplaces(ctx context.Context, region int, sink func([]search.Document) error) error {
+	dicts, err := b.dictionaries(ctx)
+	if err != nil {
+		return err
+	}
 	return b.stream(ctx, region, search.KindCarplace, carplacesQuery,
-		numberScanner(nil, defaultCarplaceType, search.KindCarplace, region), sink)
+		numberScanner(nil, dicts.levelTypes[17], search.KindCarplace, region), sink)
 }
 
 // numberScanner — сканер для видов с простым номером (apartments, rooms,
@@ -339,6 +364,12 @@ func (b *Builder) flush(ctx context.Context, region int, kind string, batch []ra
 	indexedAt := time.Now().UTC()
 	docs := make([]search.Document, 0, len(batch))
 	for _, obj := range batch {
+		if obj.doc.Kind == search.KindAddrObj {
+			id, _ := strconv.ParseInt(obj.doc.ObjectID, 10, 64)
+			if component, ok := ancestors[id]; ok {
+				obj.self = component
+			}
+		}
 		obj.doc.FullAddress = JoinComponents(ancestorChain(obj, ancestors))
 		obj.doc.IndexedAt = indexedAt
 		docs = append(docs, obj.doc)
@@ -410,10 +441,14 @@ func (b *Builder) loadAncestors(ctx context.Context, ids []int64) (map[int64]Com
 	if err := each(rows, func() error {
 		var id int64
 		var name, typ string
-		if err := rows.Scan(&id, &name, &typ); err != nil {
+		var official sql.NullString
+		if err := rows.Scan(&id, &name, &typ, &official); err != nil {
 			return err
 		}
 		components[id] = AddrObjComponent(typ, name)
+		if official.Valid {
+			components[id] = Component{Name: strings.TrimSpace(official.String)}
+		}
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("address: предки addr_obj: %w", err)
@@ -503,8 +538,13 @@ func (b *Builder) dictionaries(ctx context.Context) (*dictionaries, error) {
 	if dicts.roomTypes, err = b.loadTypeDict(ctx, "gar.room_types"); err != nil {
 		return nil, err
 	}
+	if dicts.levelTypes, err = b.loadTypeDict(ctx, `(SELECT DISTINCT ON (level) level AS id,shortname FROM gar.addr_obj_types
+ WHERE is_active AND start_date<=CURRENT_DATE AND end_date>CURRENT_DATE
+ ORDER BY level,start_date DESC,update_date DESC,id DESC) level_types`); err != nil {
+		return nil, err
+	}
 	// Empty startup results must be retried on the next request.
-	if len(dicts.houseTypes)+len(dicts.addHouseTypes)+len(dicts.apartTypes)+len(dicts.roomTypes) > 0 {
+	if len(dicts.houseTypes)+len(dicts.addHouseTypes)+len(dicts.apartTypes)+len(dicts.roomTypes)+len(dicts.levelTypes) > 0 {
 		b.dicts = dicts
 		b.dictsLoadedAt = time.Now()
 	} else {
