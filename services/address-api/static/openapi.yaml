@@ -1,0 +1,446 @@
+# Публичный REST API адресного поиска ГАР (сервис address-api).
+# Канонический файл спецификации (design-first).
+# ВНИМАНИЕ: встроенная в бинарь копия — services/address-api/static/openapi.yaml;
+# держите обе версии синхронизированными (синхронизация проверяется тестом
+# services/address-api/static/sync_test.go).
+openapi: 3.0.3
+
+info:
+  title: ГАР address-api
+  description: |
+    Публичный REST API адресного поиска по данным ГАР (Государственный адресный реестр).
+
+    Возможности:
+    * **подсказки адресов** по подстроке (проксирование gRPC-сервиса `suggest.v1.Suggester`
+      поверх поискового индекса Elasticsearch);
+    * **карточка адресного объекта** по `object_id` с полной адресной строкой,
+      собранной по иерархии ГАР из PostgreSQL (кэширование в Redis, заголовок `X-Cache`);
+    * **дочерние объекты** иерархии (навигация вниз по адресу).
+
+    Служебные эндпоинты: `/healthz` (живость), `/readyz` (готовность: PostgreSQL,
+    Redis, gRPC suggester), `/metrics` (Prometheus), `/openapi.yaml` (эта спецификация),
+    `/swagger/` (Swagger UI), `/` (демонстрационный веб-клиент).
+  version: 1.0.0
+  contact:
+    name: Платформа ГАР
+
+servers:
+  - url: http://localhost:8080
+    description: Локальный запуск
+
+tags:
+  - name: suggest
+    description: Подсказки адресов
+  - name: addresses
+    description: Карточки адресных объектов и иерархия
+  - name: service
+    description: Служебные эндпоинты
+
+paths:
+  /api/v1/suggest:
+    get:
+      tags: [suggest]
+      summary: Подсказки адресов по подстроке
+      description: |
+        Возвращает список подсказок, отсортированных по убыванию релевантности.
+        Запрос проксируется в gRPC-метод `Suggester.Suggest`; при недоступности
+        suggester отвечает `503 UNAVAILABLE`.
+      operationId: suggest
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Подстрока адреса (непустая после обрезки пробелов).
+          schema:
+            type: string
+            minLength: 1
+          example: москва тверская
+        - name: limit
+          in: query
+          required: false
+          description: Максимум подсказок.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: region
+          in: query
+          required: false
+          description: Фильтр по коду региона без ведущих нулей («77»); пусто — все регионы.
+          schema:
+            type: string
+          example: "77"
+        - name: actual_only
+          in: query
+          required: false
+          description: Только актуальные и активные объекты.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Список подсказок (может быть пустым).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuggestResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/addresses/{object_id}:
+    get:
+      tags: [addresses]
+      summary: Карточка адресного объекта
+      description: |
+        Возвращает описание объекта ГАР по `object_id`: собственные атрибуты,
+        полная адресная строка (по административной иерархии) и число активных
+        дочерних объектов. Ответ кэшируется в Redis (TTL из конфигурации сервиса,
+        по умолчанию 5 минут); источник ответа — заголовок `X-Cache: hit|miss`.
+      operationId: getAddress
+      parameters:
+        - $ref: "#/components/parameters/ObjectID"
+      responses:
+        "200":
+          description: Карточка объекта.
+          headers:
+            X-Cache:
+              description: Источник ответа — кэш Redis (hit) или PostgreSQL (miss).
+              schema:
+                type: string
+                enum: [hit, miss]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /api/v1/addresses/{object_id}/children:
+    get:
+      tags: [addresses]
+      summary: Дочерние объекты иерархии
+      description: |
+        Возвращает активные дочерние объекты (`adm_hierarchy.parent_obj_id = object_id`)
+        с их атрибутами и адресными строками. Ответ не кэшируется.
+      operationId: listChildren
+      parameters:
+        - $ref: "#/components/parameters/ObjectID"
+        - name: limit
+          in: query
+          required: false
+          description: Максимум дочерних объектов.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Список дочерних объектов (может быть пустым).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChildrenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /healthz:
+    get:
+      tags: [service]
+      summary: Проверка живости
+      operationId: healthz
+      responses:
+        "200":
+          description: Сервис жив.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+
+  /readyz:
+    get:
+      tags: [service]
+      summary: Проверка готовности
+      description: Готов, когда доступны PostgreSQL, Redis и gRPC-соединение с suggester.
+      operationId: readyz
+      responses:
+        "200":
+          description: Все зависимости доступны.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+        "503":
+          description: Хотя бы одна зависимость недоступна.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "не готов: Redis: ..."
+
+  /metrics:
+    get:
+      tags: [service]
+      summary: Метрики Prometheus
+      operationId: metrics
+      responses:
+        "200":
+          description: Метрики в формате экспозиции Prometheus.
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /openapi.yaml:
+    get:
+      tags: [service]
+      summary: Эта спецификация OpenAPI
+      operationId: openapiSpec
+      responses:
+        "200":
+          description: Спецификация OpenAPI 3.0.3 сервиса.
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /swagger/:
+    get:
+      tags: [service]
+      summary: Swagger UI
+      operationId: swaggerUI
+      responses:
+        "200":
+          description: Интерактивная документация API (статика, встроенная в бинарь).
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /:
+    get:
+      tags: [service]
+      summary: Демонстрационный веб-клиент
+      operationId: webClient
+      responses:
+        "200":
+          description: Одностраничный клиент подсказок и карточек адресов.
+          content:
+            text/html:
+              schema:
+                type: string
+
+components:
+  parameters:
+    ObjectID:
+      name: object_id
+      in: path
+      required: true
+      description: Идентификатор объекта ГАР (OBJECTID).
+      schema:
+        type: integer
+        format: int64
+      example: 1003
+
+  schemas:
+    Address:
+      type: object
+      description: Адресный объект поискового индекса (соответствует suggest.v1.Address).
+      required: [object_id, object_guid, kind, full_address, name, type_name, region, level, is_actual, is_active]
+      properties:
+        object_id:
+          type: string
+          description: Идентификатор объекта ГАР (int64 как строка).
+          example: "1003"
+        object_guid:
+          type: string
+          format: uuid
+          example: 10000000-0000-0000-0000-00000000000c
+        kind:
+          $ref: "#/components/schemas/ObjectKind"
+        full_address:
+          type: string
+          description: Адресная строка.
+          example: г Москва, ул Тверская, д 7
+        name:
+          type: string
+          description: Наименование собственного элемента.
+          example: "7"
+        type_name:
+          type: string
+          description: Сокращение типа собственного элемента.
+          example: д
+        region:
+          type: string
+          description: Код региона без ведущих нулей.
+          example: "77"
+        level:
+          type: integer
+          description: Уровень объекта (reestr_objects.level_id).
+          example: 10
+        is_actual:
+          type: boolean
+          example: true
+        is_active:
+          type: boolean
+          example: true
+
+    SuggestItem:
+      allOf:
+        - $ref: "#/components/schemas/Address"
+        - type: object
+          required: [score]
+          properties:
+            score:
+              type: number
+              format: double
+              description: Релевантность поискового ответа.
+              example: 12.34
+
+    AddressDetails:
+      type: object
+      description: |
+        Карточка адресного объекта из PostgreSQL. `children_count` присутствует
+        только в ответе карточки; в элементах списка дочерних объектов опускается.
+      required: [object_id, object_guid, kind, name, type_name, level, region, full_address, is_actual, is_active]
+      properties:
+        object_id:
+          type: integer
+          format: int64
+          example: 1003
+        object_guid:
+          type: string
+          format: uuid
+          example: 10000000-0000-0000-0000-00000000000c
+        kind:
+          $ref: "#/components/schemas/ObjectKind"
+        name:
+          type: string
+          example: "7"
+        type_name:
+          type: string
+          example: д
+        level:
+          type: integer
+          example: 10
+        region:
+          type: string
+          example: "77"
+        full_address:
+          type: string
+          example: г Москва, ул Тверская, д 7
+        is_actual:
+          type: boolean
+          example: true
+        is_active:
+          type: boolean
+          example: true
+        parent_object_id:
+          type: integer
+          format: int64
+          description: Родительский объект иерархии; отсутствует у корня.
+          example: 1002
+        children_count:
+          type: integer
+          format: int64
+          description: Число активных дочерних объектов иерархии.
+          example: 12
+
+    ObjectKind:
+      type: string
+      description: Вид адресного объекта.
+      enum: [addr_obj, house, apartment, room, stead, carplace]
+      example: house
+
+    SuggestResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SuggestItem"
+
+    ChildrenResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AddressDetails"
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Машиночитаемый код ошибки.
+              enum: [VALIDATION, NOT_FOUND, UNAVAILABLE, INTERNAL]
+              example: NOT_FOUND
+            message:
+              type: string
+              description: Человекочитаемое описание на русском.
+              example: адресный объект 999999 не найден
+
+  responses:
+    BadRequest:
+      description: Ошибка валидации параметров запроса.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: VALIDATION
+              message: параметр q не задан
+    NotFound:
+      description: Объект не найден.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: NOT_FOUND
+              message: адресный объект 999999 не найден
+    Internal:
+      description: Внутренняя ошибка сервиса.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: INTERNAL
+              message: внутренняя ошибка
+    Unavailable:
+      description: Зависимость временно недоступна (suggester).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: UNAVAILABLE
+              message: сервис подсказок временно недоступен

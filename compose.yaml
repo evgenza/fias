@@ -297,6 +297,40 @@ services:
       retries: 5
       start_period: 30s
 
+  # Публичный REST API (h2c :8080): подсказки через gRPC suggester,
+  # карточки объектов из PostgreSQL с кэшем Redis, Swagger UI и веб-клиент.
+  address-api:
+    build:
+      context: .
+      dockerfile: services/address-api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-gar}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-gar}?sslmode=disable
+      SUGGESTER_GRPC_ADDR: suggester:50051
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      CACHE_TTL: 5m
+      HTTP_ADDR: :8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      suggester:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
   # gRPC-сервис подсказок адресов поверх индекса gar-addresses (read-only):
   # unary GetAddress/Suggest и server-streaming StreamSuggestions.
   suggester:

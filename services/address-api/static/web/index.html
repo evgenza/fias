@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ГАР — поиск адресов</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="app">
+    <header class="header">
+      <h1>Поиск адресов ГАР</h1>
+      <p class="subtitle">Подсказки и карточки адресных объектов из Государственного адресного реестра</p>
+    </header>
+
+    <section class="search">
+      <input
+        id="search-input"
+        type="search"
+        autocomplete="off"
+        placeholder="Начните вводить адрес, например: москва тверская"
+        aria-label="Поиск адреса">
+      <ul id="suggest-list" class="suggest-list" hidden></ul>
+    </section>
+
+    <p id="status" class="status" role="status"></p>
+
+    <section id="details" class="details" hidden>
+      <div class="details-head">
+        <h2 id="details-address"></h2>
+        <span id="cache-badge" class="badge badge-cache" hidden>из кэша</span>
+      </div>
+      <dl id="details-fields" class="fields"></dl>
+      <div id="parent-link-wrap" class="parent" hidden>
+        Родитель: <a href="#" id="parent-link"></a>
+      </div>
+      <h3 id="children-title" hidden>Дочерние объекты</h3>
+      <ul id="children-list" class="children"></ul>
+    </section>
+  </main>
+
+  <footer class="footer">ГАР address-api demo</footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
