@@ -237,3 +237,7 @@ dataset параллельно; sample не публикуется.
 ## Волна 0 / E2 (2026-10-20)
 
 Smoke проверяет job и health одного target через jq; absent/down отвергаются, UP принимается, bash -n пройден.
+
+## Волна 0 / E3 (2026-10-20)
+
+Удалён .idea из индекса, добавлен ignore, пароли заменены change_me, DATABASE_URL использует POSTGRES_PORT; compose config валиден.

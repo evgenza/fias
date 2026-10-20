@@ -520,7 +520,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Исправление:** проверять через
   `jq -e '.data.activeTargets[] | select(.labels.job==$j and .health=="up")'`.
 
-### [ ] E3. Гигиена репозитория — Low
+### [x] E3. Гигиена репозитория — Low
 - **Что сделать:**
   - `git rm -r --cached .idea` и добавить `.idea/` в `.gitignore`;
   - в `.env.example` вместо правдоподобных паролей — плейсхолдеры `change_me`;
@@ -630,3 +630,4 @@ suggester, инфраструктура и CI. Находки сверены с 
 |---|---|---|---|
 | 2026-10-20 | E1 | [x] | Исправлен healthcheck Elasticsearch; изолированный контейнер без ES переходит в unhealthy, compose config валиден. |
 | 2026-10-20 | E2 | [x] | Smoke проверяет job и health одного target через jq; absent/down отвергаются, UP принимается, bash -n пройден. |
+| 2026-10-20 | E3 | [x] | Удалён .idea из индекса, добавлен ignore, пароли заменены change_me, DATABASE_URL использует POSTGRES_PORT; compose config валиден. |
