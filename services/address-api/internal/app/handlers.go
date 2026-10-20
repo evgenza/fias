@@ -241,6 +241,9 @@ func (h *handler) handleChildren(w http.ResponseWriter, r *http.Request) {
 	}
 	ids, err := address.ListChildren(r.Context(), h.store, objectID, limit)
 	if err != nil {
+		if h.writeContextError(w, r, err) {
+			return
+		}
 		h.log.ErrorContext(r.Context(), "children: выборка", "object_id", objectID, "error", err)
 		writeError(w, http.StatusInternalServerError, codeInternal, "внутренняя ошибка")
 		return

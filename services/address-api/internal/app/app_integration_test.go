@@ -20,6 +20,8 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"gar-importer/internal/config"
 	"gar-importer/internal/control"
@@ -42,13 +44,21 @@ const (
 // возвращает фиксированные адреса и запоминает последний запрос.
 type fakeSuggester struct {
 	suggestv1.UnimplementedSuggesterServer
-	mu      sync.Mutex
-	lastReq *suggestv1.SuggestRequest
+	mu       sync.Mutex
+	lastReq  *suggestv1.SuggestRequest
+	failNext int
+	calls    int
 }
 
 func (f *fakeSuggester) Suggest(_ context.Context, req *suggestv1.SuggestRequest) (*suggestv1.SuggestResponse, error) {
 	f.mu.Lock()
 	f.lastReq = req
+	f.calls++
+	if f.failNext > 0 {
+		f.failNext--
+		f.mu.Unlock()
+		return nil, status.Error(codes.Unavailable, "transient test failure")
+	}
 	f.mu.Unlock()
 	return &suggestv1.SuggestResponse{Addresses: []*suggestv1.Address{{
 		ObjectId:    strconv.FormatInt(houseObjID, 10),
@@ -140,6 +150,21 @@ func TestAddressAPIEndToEnd(t *testing.T) {
 			if !strings.Contains(body, `"code":"VALIDATION"`) {
 				t.Fatalf("%s: ответ %s", url, body)
 			}
+		}
+	})
+
+	t.Run("gRPC retries Unavailable", func(t *testing.T) {
+		env.fake.mu.Lock()
+		env.fake.failNext = 1
+		before := env.fake.calls
+		env.fake.mu.Unlock()
+		resp := get(t, ctx, env.baseURL+"/api/v1/suggest?q=test")
+		readBody(t, resp)
+		env.fake.mu.Lock()
+		calls := env.fake.calls - before
+		env.fake.mu.Unlock()
+		if resp.StatusCode != 200 || calls != 2 {
+			t.Fatalf("retry: HTTP %d, calls %d", resp.StatusCode, calls)
 		}
 	})
 
@@ -313,8 +338,16 @@ func TestAddressAPIEndToEnd(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("статус %d", resp.StatusCode)
 		}
-		if !strings.Contains(body, "SwaggerUIBundle") {
+		if !strings.Contains(body, `src="./init.js"`) || !strings.Contains(body, `id="swagger-ui"`) {
 			t.Fatal("/swagger/ не содержит разметку Swagger UI")
+		}
+		if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "script-src 'self'") {
+			t.Fatal("Swagger CSP is missing")
+		}
+		resp = get(t, ctx, env.baseURL+"/swagger/init.js")
+		body = readBody(t, resp)
+		if resp.StatusCode != http.StatusOK || !strings.Contains(body, "SwaggerUIBundle") {
+			t.Fatal("external Swagger initializer is unavailable")
 		}
 		// Завендоренный ассет отдаётся из embed.
 		resp = get(t, ctx, env.baseURL+"/swagger/swagger-ui.css")

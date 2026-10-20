@@ -494,7 +494,7 @@ suggester, инфраструктура и CI. Находки сверены с 
   - общий `detailsSeq` для `showDetails`/`loadChildren`;
   - при коротком вводе увеличивать `requestSeq` или использовать `AbortController`.
 
-### [ ] D10. OpenAPI и заголовки безопасности — Low
+### [x] D10. OpenAPI и заголовки безопасности — Low
 - **Файлы:** `api/openapi/address-api.yaml` (+ копия `services/address-api/static/openapi.yaml`),
   `services/address-api/internal/app/*`.
 - **Что сделать:**
@@ -674,3 +674,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | D8 | [x] | DNS round_robin, keepalive 30s/10s, bounded retry Unavailable; server 128 streams, keepalive enforcement, ES-derived health with shutdown NOT_SERVING, opt-in GRPC_REFLECTION. Health regression/unit and address API E2E pass. |
 
 | 2026-10-20 | D9 | [x] | Shared detailsSeq protects cards/children/errors; every input and card selection invalidates suggestions and pending debounce. Three deferred-response regressions fail before fix and pass after (node --test tests/web/app.test.cjs). |
+
+| 2026-10-20 | D10 | [x] | JSON routing errors 404/405 with Allow, positive ObjectID, internal operational servers and actual readiness response in OpenAPI; CSP/nosniff/frame-ancestors, external Swagger initializer. Contract, YAML/reference/sync and E2E Swagger tests pass. |
+
+| 2026-10-20 | Wave 4 | [x] | D2/D4–D10 completed in task commits. Final go build, make vet, golangci-lint (0 issues), go test, full make test-integration with isolated PostgreSQL, changed-package unit race tests, 3 web response-race tests, compose config and bash -n pass. PostgreSQL budget: 200 children = 8 SQL; Redis canceled-write/negative TTL/version namespace and gRPC Unavailable retry regressions pass. |

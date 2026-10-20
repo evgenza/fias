@@ -266,3 +266,5 @@ go run ./cmd/gar-importer import --zip "$HOME/Downloads/gar_xml.zip" --regions 7
 `../../01 Руководства/Формирование адресной строки.md`).
 
 Address-api operational endpoints `/metrics`, `/healthz`, `/readyz` use `ADDRESS_API_ADMIN_HTTP_ADDR` (default `:9214`), accessible inside the compose network without a host port mapping.
+
+Suggester gRPC reflection is disabled by default; set `GRPC_REFLECTION=true` for development inspection. `CACHE_TTL` must be positive and at most `15m`.

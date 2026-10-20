@@ -17,8 +17,8 @@ info:
       собранной по иерархии ГАР из PostgreSQL (кэширование в Redis, заголовок `X-Cache`);
     * **дочерние объекты** иерархии (навигация вниз по адресу).
 
-    Служебные эндпоинты: `/healthz` (живость), `/readyz` (готовность: PostgreSQL,
-    Redis, gRPC suggester), `/metrics` (Prometheus), `/openapi.yaml` (эта спецификация),
+    Служебные эндпоинты: `/healthz` (живость), `/readyz` (готовность: PostgreSQL;
+    опциональные Redis/gRPC отражаются в метриках), `/metrics` (Prometheus) — на внутреннем порту 9214; `/openapi.yaml` (эта спецификация),
     `/swagger/` (Swagger UI), `/` (демонстрационный веб-клиент).
   version: 1.0.0
   contact:
@@ -50,10 +50,11 @@ paths:
         - name: q
           in: query
           required: true
-          description: Подстрока адреса (непустая после обрезки пробелов).
+          description: Подстрока адреса (непустая после обрезки пробелов), до 200 символов и 20 слов.
           schema:
             type: string
             minLength: 1
+            maxLength: 200
           example: москва тверская
         - name: limit
           in: query
@@ -67,9 +68,10 @@ paths:
         - name: region
           in: query
           required: false
-          description: Фильтр по коду региона без ведущих нулей («77»); пусто — все регионы.
+          description: Код региона (до 3 цифр); пусто — все регионы.
           schema:
             type: string
+            pattern: "^[0-9]{0,3}$"
           example: "77"
         - name: actual_only
           in: query
@@ -91,6 +93,15 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
+
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "499":
+          $ref: "#/components/responses/Canceled"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   /api/v1/addresses/{object_id}:
     get:
@@ -123,6 +134,12 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/Internal"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "499":
+          $ref: "#/components/responses/Canceled"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   /api/v1/addresses/{object_id}/children:
     get:
@@ -156,8 +173,17 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/Internal"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "499":
+          $ref: "#/components/responses/Canceled"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   /healthz:
+    servers:
+      - url: http://localhost:9214
+        description: Внутренний порт (в compose без проброса на хост)
     get:
       tags: [service]
       summary: Проверка живости
@@ -172,28 +198,34 @@ paths:
                 example: ok
 
   /readyz:
+    servers:
+      - url: http://localhost:9214
+        description: Внутренний порт (в compose без проброса на хост)
     get:
       tags: [service]
       summary: Проверка готовности
-      description: Готов, когда доступны PostgreSQL, Redis и gRPC-соединение с suggester.
+      description: Готов при доступной PostgreSQL; Redis и suggester отражаются в метриках.
       operationId: readyz
       responses:
         "200":
-          description: Все зависимости доступны.
+          description: PostgreSQL доступна.
           content:
             text/plain:
               schema:
                 type: string
                 example: ok
         "503":
-          description: Хотя бы одна зависимость недоступна.
+          description: PostgreSQL недоступна или сервис завершает работу.
           content:
             text/plain:
               schema:
                 type: string
-                example: "не готов: Redis: ..."
+                example: "not ready\n"
 
   /metrics:
+    servers:
+      - url: http://localhost:9214
+        description: Внутренний порт (в compose без проброса на хост)
     get:
       tags: [service]
       summary: Метрики Prometheus
@@ -255,6 +287,7 @@ components:
       schema:
         type: integer
         format: int64
+        minimum: 1
       example: 1003
 
   schemas:
@@ -396,7 +429,7 @@ components:
             code:
               type: string
               description: Машиночитаемый код ошибки.
-              enum: [VALIDATION, NOT_FOUND, UNAVAILABLE, INTERNAL]
+              enum: [VALIDATION, NOT_FOUND, METHOD_NOT_ALLOWED, UNAVAILABLE, INTERNAL, CANCELED, TIMEOUT]
               example: NOT_FOUND
             message:
               type: string
@@ -444,3 +477,27 @@ components:
             error:
               code: UNAVAILABLE
               message: сервис подсказок временно недоступен
+
+    MethodNotAllowed:
+      description: Метод не поддерживается для маршрута.
+      headers:
+        Allow:
+          schema:
+            type: string
+          description: Разрешённые методы (GET, HEAD).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Canceled:
+      description: Клиент отменил запрос.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Timeout:
+      description: Превышено время запроса.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

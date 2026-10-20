@@ -344,3 +344,6 @@ Suggester client uses DNS round_robin, 30s/10s keepalive and up to three attempt
 
 ## 2026-10-20 — D9
 Web client discards stale card/children/suggestion responses and stale card errors. Starting navigation clears old children and invalidates pending search/debounce.
+
+## 2026-10-20 — D10 / wave 4 validation
+Mux routing errors 404/405 use the Error envelope and advertise allowed methods. Public responses carry CSP, nosniff and frame restrictions. Swagger initialization is external so scripts follow script-src self. OpenAPI specifies positive ObjectID, input/context error limits, actual readiness semantics and internal operational listener; embedded copy remains synchronized. Full build/vet/lint/unit/integration, affected unit race tests and web race regressions pass. Additional integration tests confirm cancellation-independent Redis writes and gRPC retries.

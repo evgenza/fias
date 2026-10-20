@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/singleflight"
 	"log/slog"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/singleflight"
 )
 
 // cacheKeyPrefix — префикс ключей карточек адресных объектов (версия схемы

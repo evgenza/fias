@@ -67,11 +67,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer store.Close()
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:        cfg.RedisAddr,
-		Password:    cfg.RedisPassword,
-		DialTimeout: 200 * time.Millisecond, ReadTimeout: 200 * time.Millisecond, WriteTimeout: 200 * time.Millisecond, MaxRetries: -1, ContextTimeoutEnabled: true,
-	})
+	redisClient := redis.NewClient(redisOptions(cfg))
 	defer redisClient.Close()
 	cardCache := newCache(redisClient, cfg.CacheTTL, log, met)
 	cardCache.version = func(ctx context.Context) (string, error) {
@@ -109,7 +105,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	mux := newMux(h)
 	// Цепочка middleware: трейсинг → метрики (шаблон маршрута как метка) → лог.
-	var root http.Handler = mux
+	root := mux
 	root = logRequests(log, root)
 	root = httpMetrics.HTTPMiddleware(routeLabel)(root)
 	root = spanRouteName(root)
@@ -136,7 +132,7 @@ func Run(ctx context.Context, cfg Config) error {
 }
 
 // newMux собирает маршруты сервиса (паттерны Go 1.22+).
-func newMux(h *handler) *http.ServeMux {
+func newMux(h *handler) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/v1/suggest", apiDeadline(h.handleSuggest))
@@ -164,7 +160,23 @@ func newMux(h *handler) *http.ServeMux {
 	mux.Handle("GET /index.html", cacheStatic(http.FileServerFS(webFS)))
 	mux.Handle("GET /app.js", cacheStatic(http.FileServerFS(webFS)))
 	mux.Handle("GET /style.css", cacheStatic(http.FileServerFS(webFS)))
-	return mux
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		allowed := []string{}
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			probe := r.Clone(r.Context())
+			probe.Method = method
+			if _, pattern := mux.Handler(probe); pattern != "" && pattern != "/" {
+				allowed = append(allowed, method)
+			}
+		}
+		if len(allowed) > 0 {
+			w.Header().Set("Allow", strings.Join(allowed, ", "))
+			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "метод не поддерживается")
+			return
+		}
+		writeError(w, http.StatusNotFound, codeNotFound, "маршрут не найден")
+	})
+	return securityHeaders(mux)
 }
 
 // serveOpenAPI отдаёт спецификацию OpenAPI (встроенная копия
@@ -301,4 +313,17 @@ func apiDeadline(next http.HandlerFunc) http.HandlerFunc {
 		defer cancel()
 		next(w, r.WithContext(ctx))
 	}
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func redisOptions(cfg Config) *redis.Options {
+	return &redis.Options{Addr: cfg.RedisAddr, Password: cfg.RedisPassword, DialTimeout: 200 * time.Millisecond, ReadTimeout: 200 * time.Millisecond, WriteTimeout: 200 * time.Millisecond, MaxRetries: -1, ContextTimeoutEnabled: true}
 }

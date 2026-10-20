@@ -104,6 +104,14 @@ func TestRunHTTPServerGracefulShutdown(t *testing.T) {
 		t.Fatalf("healthz: got %d", response.StatusCode)
 	}
 	cancel()
+	response, err = http.Get(fmt.Sprintf("http://%s/readyz", addr))
+	if err != nil {
+		t.Fatalf("readiness drain request: %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("draining readiness: %d", response.StatusCode)
+	}
 	select {
 	case err := <-done:
 		if err != nil {
