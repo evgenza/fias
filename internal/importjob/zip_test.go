@@ -181,6 +181,17 @@ func TestZIPToAllTables(t *testing.T) {
 		t.Fatalf("broken XML: %+v, %v", report, err)
 	}
 
+	// A different archive cannot bypass a failed import's reserved digest.
+	if _, err := importjob.RunWithJournal(ctx, mustOpen(t, sample), factory, journal, options); !errors.Is(err, importjob.ErrReleaseBlocked) {
+		t.Fatalf("failed archive bypassed: %v", err)
+	}
+	// Independent cancellation scenario on an empty dataset.
+	resetSchema(t, ctx, db)
+	journal, err = control.Open(ctx, db.SQL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	factory = storage.NewWriterFactory(db.Client, journal)
 	stopCtx, stop := context.WithCancel(ctx)
 	options.Progress = func(stats importjob.FileStats) {
 		if stats.Written > 0 {

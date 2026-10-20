@@ -18,6 +18,9 @@ const (
 // ImportRequested — запрос на импорт архива ГАР из объектного хранилища.
 type ImportRequested struct {
 	SchemaVersion int       `json:"schema_version"`
+	Mode          string    `json:"mode,omitempty"`
+	BaseRelease   string    `json:"base_release,omitempty"`
+	TargetRelease string    `json:"target_release,omitempty"`
 	RequestID     string    `json:"request_id"`
 	Bucket        string    `json:"bucket"`
 	Key           string    `json:"key"`
@@ -30,6 +33,7 @@ type ImportRequested struct {
 // ObjectsChanged — уведомление о записанных объектах по файлу плана импорта.
 type ObjectsChanged struct {
 	SchemaVersion int       `json:"schema_version"`
+	SampleLimit   int64     `json:"sample_limit,omitempty"`
 	Digest        string    `json:"digest,omitempty"`
 	RunID         int64     `json:"run_id"`
 	Kind          string    `json:"kind"`

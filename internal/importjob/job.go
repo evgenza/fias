@@ -93,6 +93,9 @@ type Journal interface {
 
 // Options — параметры запуска сценария.
 type Options struct {
+	Mode           string
+	BaseRelease    string
+	TargetRelease  string
 	BatchSize      int
 	LimitPerFile   int64
 	Regions        []int
@@ -120,6 +123,7 @@ type Options struct {
 type FileCompletedEvent struct {
 	RunID       int64
 	Digest      string
+	SampleLimit int64
 	Kind        gar.Kind
 	Source      string // нормализованное семейство параметров (для PARAM)
 	Region      int    // 0 — общероссийский справочник
@@ -149,6 +153,7 @@ type Report struct {
 	Decoded, Written  int64
 	CommittedInput    int64
 	RunID             int64
+	AlreadyReady      bool
 	Duration          time.Duration
 }
 
@@ -185,6 +190,9 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 	if err != nil {
 		return report, err
 	}
+	if err := resolveRelease(source, &options); err != nil {
+		return report, err
+	}
 	options.sourceDigest = digest
 	var (
 		runID       int64
@@ -206,8 +214,23 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 				}
 				if id != 0 {
 					report.RunID = id
+					report.AlreadyReady = true
 					return report, nil
 				}
+			}
+		}
+		if options.ResumeRunID > 0 {
+			original, _, sourceErr := journal.RunSource(ctx, options.ResumeRunID)
+			if sourceErr != nil {
+				return report, sourceErr
+			}
+			if original != digest {
+				return report, fmt.Errorf("%w: изменился digest источника", ErrResumeMismatch)
+			}
+		}
+		if releases, ok := journal.(releaseJournal); ok && options.TargetRelease != "" {
+			if err := releases.PrepareRelease(ctx, digest, options.Mode, options.BaseRelease, options.TargetRelease); err != nil {
+				return report, err
 			}
 		}
 		runID, err = beginRun(ctx, journal, source, digest, options)
@@ -215,6 +238,11 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 			return report, err
 		}
 		report.RunID = runID
+		if releases, ok := journal.(releaseJournal); ok {
+			if err := releases.SetRunRelease(ctx, runID, options.BaseRelease, options.TargetRelease); err != nil {
+				return finishRunErr(ctx, journal, runID, report, err)
+			}
+		}
 		if complete, err = journal.CompleteFiles(ctx, runID); err != nil {
 			return finishRunErr(ctx, journal, runID, report, err)
 		}
@@ -290,7 +318,10 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 
 // beginRun создаёт запуск или проверяет совместимость при resume.
 func beginRun(ctx context.Context, journal Journal, source Archive, digest string, options Options) (int64, error) {
-	mode := ModeSnapshot
+	mode := options.Mode
+	if mode == "" {
+		mode = ModeSnapshot
+	}
 	if options.LimitPerFile > 0 {
 		mode = ModeSample
 	}
@@ -328,6 +359,7 @@ func beginRun(ctx context.Context, journal Journal, source Archive, digest strin
 		return options.ResumeRunID, nil
 	}
 	optionsJSON, err := json.Marshal(map[string]any{
+		"mode": options.Mode, "base_release": options.BaseRelease, "target_release": options.TargetRelease,
 		"batch_size": options.BatchSize, "limit_per_file": options.LimitPerFile,
 		"regions": options.Regions, "kinds": options.Kinds, "sources": options.Sources,
 	})
@@ -414,7 +446,7 @@ func importFile(ctx context.Context, source Archive, writers WriterFactory, jour
 	if options.OnFileCompleted != nil {
 		event := FileCompletedEvent{
 			RunID: runID, Kind: entry.Kind, Source: entry.Source, Region: entry.Region,
-			Digest: options.sourceDigest, Path: entry.Path, Written: writer.WriteOps(), CompletedAt: time.Now(),
+			Digest: options.sourceDigest, SampleLimit: options.LimitPerFile, Path: entry.Path, Written: writer.WriteOps(), CompletedAt: time.Now(),
 		}
 		if err := options.OnFileCompleted(ctx, event); err != nil {
 			if journal != nil {
@@ -481,13 +513,19 @@ func BuildFilters(options Options) (gar.Filters, error) {
 
 func validateResumeOptions(saved string, requested Options) error {
 	var previous struct {
-		Regions      []int      `json:"regions"`
-		Kinds        []gar.Kind `json:"kinds"`
-		Sources      []string   `json:"sources"`
-		LimitPerFile int64      `json:"limit_per_file"`
+		Mode          string     `json:"mode"`
+		BaseRelease   string     `json:"base_release"`
+		TargetRelease string     `json:"target_release"`
+		Regions       []int      `json:"regions"`
+		Kinds         []gar.Kind `json:"kinds"`
+		Sources       []string   `json:"sources"`
+		LimitPerFile  int64      `json:"limit_per_file"`
 	}
 	if err := json.Unmarshal([]byte(saved), &previous); err != nil {
 		return fmt.Errorf("возобновление: параметры исходного запуска: %w", err)
+	}
+	if (previous.Mode != "" && previous.Mode != requested.Mode) || (previous.BaseRelease != "" && previous.BaseRelease != requested.BaseRelease) || (previous.TargetRelease != "" && previous.TargetRelease != requested.TargetRelease) {
+		return fmt.Errorf("%w: изменились параметры выпуска", ErrResumeMismatch)
 	}
 	oldFilters, err := BuildFilters(Options{Regions: previous.Regions, Kinds: previous.Kinds, Sources: previous.Sources})
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"gar-importer/internal/gartype"
 
 	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 )
 
 // GARBatch принимает типизированные записи одного формата и сохраняет
@@ -279,7 +280,7 @@ func (b *garAddHouseTypeBatch) Save(ctx context.Context) error {
 
 func (b *garAddHouseTypeBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.AddHouseType.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "add_house_types".update_date`) }))).
 		Update(func(u *AddHouseTypeUpsert) {
 
 			u.UpdateName()
@@ -429,7 +430,7 @@ func (b *garAddrObjBatch) Save(ctx context.Context) error {
 
 func (b *garAddrObjBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.AddrObj.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "addr_obj".update_date`) }))).
 		Update(func(u *AddrObjUpsert) {
 
 			u.UpdateObjectID()
@@ -571,7 +572,7 @@ func (b *garAddrObjDivisionBatch) Save(ctx context.Context) error {
 
 func (b *garAddrObjDivisionBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.AddrObjDivision.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id")).
 		Update(func(u *AddrObjDivisionUpsert) {
 
 			u.UpdateParentID()
@@ -701,7 +702,7 @@ func (b *garAddrObjTypeBatch) Save(ctx context.Context) error {
 
 func (b *garAddrObjTypeBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.AddrObjType.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "addr_obj_types".update_date`) }))).
 		Update(func(u *AddrObjTypeUpsert) {
 
 			u.UpdateLevel()
@@ -857,7 +858,7 @@ func (b *garAdmHierarchyItemBatch) Save(ctx context.Context) error {
 
 func (b *garAdmHierarchyItemBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.AdmHierarchyItem.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "adm_hierarchy".update_date`) }))).
 		Update(func(u *AdmHierarchyItemUpsert) {
 
 			u.UpdateObjectID()
@@ -1023,7 +1024,7 @@ func (b *garApartmentBatch) Save(ctx context.Context) error {
 
 func (b *garApartmentBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.Apartment.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "apartments".update_date`) }))).
 		Update(func(u *ApartmentUpsert) {
 
 			u.UpdateObjectID()
@@ -1171,7 +1172,7 @@ func (b *garApartmentTypeBatch) Save(ctx context.Context) error {
 
 func (b *garApartmentTypeBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.ApartmentType.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "apartment_types".update_date`) }))).
 		Update(func(u *ApartmentTypeUpsert) {
 
 			u.UpdateName()
@@ -1317,7 +1318,7 @@ func (b *garCarplaceBatch) Save(ctx context.Context) error {
 
 func (b *garCarplaceBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.Carplace.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "carplaces".update_date`) }))).
 		Update(func(u *CarplaceUpsert) {
 
 			u.UpdateObjectID()
@@ -1459,7 +1460,7 @@ func (b *garChangeHistoryBatch) Save(ctx context.Context) error {
 
 func (b *garChangeHistoryBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.ChangeHistory.CreateBulk(b.builders...).
-		OnConflictColumns("change_id").
+		OnConflict(sql.ConflictColumns("change_id")).
 		Update(func(u *ChangeHistoryUpsert) {
 
 			u.UpdateObjectID()
@@ -1611,7 +1612,7 @@ func (b *garHouseBatch) Save(ctx context.Context) error {
 
 func (b *garHouseBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.House.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "houses".update_date`) }))).
 		Update(func(u *HouseUpsert) {
 
 			u.UpdateObjectID()
@@ -1767,7 +1768,7 @@ func (b *garHouseTypeBatch) Save(ctx context.Context) error {
 
 func (b *garHouseTypeBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.HouseType.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "house_types".update_date`) }))).
 		Update(func(u *HouseTypeUpsert) {
 
 			u.UpdateName()
@@ -1911,7 +1912,7 @@ func (b *garMunHierarchyItemBatch) Save(ctx context.Context) error {
 
 func (b *garMunHierarchyItemBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.MunHierarchyItem.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "mun_hierarchy".update_date`) }))).
 		Update(func(u *MunHierarchyItemUpsert) {
 
 			u.UpdateObjectID()
@@ -2063,7 +2064,7 @@ func (b *garNormativeDocBatch) Save(ctx context.Context) error {
 
 func (b *garNormativeDocBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.NormativeDoc.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "normative_docs".update_date`) }))).
 		Update(func(u *NormativeDocUpsert) {
 
 			u.UpdateName()
@@ -2195,7 +2196,7 @@ func (b *garNormativeDocKindBatch) Save(ctx context.Context) error {
 
 func (b *garNormativeDocKindBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.NormativeDocKind.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id")).
 		Update(func(u *NormativeDocKindUpsert) {
 
 			u.UpdateName()
@@ -2311,7 +2312,7 @@ func (b *garNormativeDocTypeBatch) Save(ctx context.Context) error {
 
 func (b *garNormativeDocTypeBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.NormativeDocType.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id")).
 		Update(func(u *NormativeDocTypeUpsert) {
 
 			u.UpdateName()
@@ -2437,7 +2438,7 @@ func (b *garObjectLevelBatch) Save(ctx context.Context) error {
 
 func (b *garObjectLevelBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.ObjectLevel.CreateBulk(b.builders...).
-		OnConflictColumns("level").
+		OnConflict(sql.ConflictColumns("level"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "object_levels".update_date`) }))).
 		Update(func(u *ObjectLevelUpsert) {
 
 			u.UpdateName()
@@ -2571,7 +2572,7 @@ func (b *garOperationTypeBatch) Save(ctx context.Context) error {
 
 func (b *garOperationTypeBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.OperationType.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "operation_types".update_date`) }))).
 		Update(func(u *OperationTypeUpsert) {
 
 			u.UpdateName()
@@ -2713,7 +2714,7 @@ func (b *garParamBatch) Save(ctx context.Context) error {
 
 func (b *garParamBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.Param.CreateBulk(b.builders...).
-		OnConflictColumns("source", "source_id").
+		OnConflict(sql.ConflictColumns("source", "source_id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "param".update_date`) }))).
 		Update(func(u *ParamUpsert) {
 
 			u.UpdateSourceID()
@@ -2855,7 +2856,7 @@ func (b *garParamTypeBatch) Save(ctx context.Context) error {
 
 func (b *garParamTypeBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.ParamType.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "param_types".update_date`) }))).
 		Update(func(u *ParamTypeUpsert) {
 
 			u.UpdateName()
@@ -2989,7 +2990,7 @@ func (b *garReestrObjectBatch) Save(ctx context.Context) error {
 
 func (b *garReestrObjectBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.ReestrObject.CreateBulk(b.builders...).
-		OnConflictColumns("object_id").
+		OnConflict(sql.ConflictColumns("object_id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "reestr_objects".update_date`) }))).
 		Update(func(u *ReestrObjectUpsert) {
 
 			u.UpdateCreateDate()
@@ -3135,7 +3136,7 @@ func (b *garRoomBatch) Save(ctx context.Context) error {
 
 func (b *garRoomBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.Room.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "rooms".update_date`) }))).
 		Update(func(u *RoomUpsert) {
 
 			u.UpdateObjectID()
@@ -3283,7 +3284,7 @@ func (b *garRoomTypeBatch) Save(ctx context.Context) error {
 
 func (b *garRoomTypeBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.RoomType.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "room_types".update_date`) }))).
 		Update(func(u *RoomTypeUpsert) {
 
 			u.UpdateName()
@@ -3429,7 +3430,7 @@ func (b *garSteadBatch) Save(ctx context.Context) error {
 
 func (b *garSteadBatch) saveOnce(ctx context.Context, client *Client) error {
 	err := client.Stead.CreateBulk(b.builders...).
-		OnConflictColumns("id").
+		OnConflict(sql.ConflictColumns("id"), sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "steads".update_date`) }))).
 		Update(func(u *SteadUpsert) {
 
 			u.UpdateObjectID()

@@ -136,6 +136,7 @@ func subscribe[T any](ctx context.Context, s *Subscriber, subject, durable strin
 		DeliverPolicy: nats.DeliverAllPolicy,
 		AckPolicy:     nats.AckExplicitPolicy,
 		AckWait:       consumerAckWait,
+		MaxAckPending: 1,
 		MaxDeliver:    -1, // Application limit: DLQ failures must remain retryable.
 	}
 	if _, err := js.AddConsumer(StreamName, consumer, nats.Context(ctx)); err != nil {

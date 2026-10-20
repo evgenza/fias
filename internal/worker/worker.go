@@ -220,7 +220,7 @@ func (w *worker) ready(ctx context.Context) error {
 }
 
 // handle выполняет одну задачу импорта и подтверждает сообщение по результату:
-// успех — Ack; временная ошибка (сеть, БД, NATS, timeout) — Nak с задержкой;
+// успех — Ack; временная ошибка удерживает текущую задачу с задержкой;
 // постоянная (валидация XML, битый архив, нет объекта в S3, bad request) — Term.
 func (w *worker) handle(ctx context.Context, msg events.ImportRequestMsg) {
 	request := msg.Payload
@@ -234,6 +234,17 @@ func (w *worker) handle(ctx context.Context, msg events.ImportRequestMsg) {
 
 	started := time.Now()
 	report, err := w.runImport(ctx, request)
+	for err != nil && ctx.Err() == nil && !isPermanent(err) {
+		logger.Warn("временная ошибка; очередь ждёт текущий архив", "error", err)
+		select {
+		case <-ctx.Done():
+		case <-time.After(nakDelay):
+		}
+		if ctx.Err() != nil {
+			break
+		}
+		report, err = w.runImport(ctx, request)
+	}
 	w.metrics.runDuration.Observe(time.Since(started).Seconds())
 	if err != nil {
 		for _, file := range report.Files {
@@ -244,6 +255,9 @@ func (w *worker) handle(ctx context.Context, msg events.ImportRequestMsg) {
 	}
 	switch {
 	case err == nil:
+		if report.AlreadyReady {
+			logger.Info("архив уже импортирован, повтор пропущен", "run_id", report.RunID)
+		}
 		logger.Info("задача импорта выполнена",
 			"run_id", report.RunID, "files", len(report.Files), "written", report.Written,
 			"duration", report.Duration.Round(time.Millisecond).String())
@@ -295,6 +309,7 @@ func (w *worker) runImport(ctx context.Context, request events.ImportRequested) 
 	return importjob.RunWithJournal(ctx, archive,
 		storage.NewWriterFactory(w.database.Client, w.journal), w.journal,
 		importjob.Options{
+			Mode: request.Mode, BaseRelease: request.BaseRelease, TargetRelease: request.TargetRelease,
 			BatchSize:       request.BatchSize,
 			ResumeRunID:     -1,
 			ResumeOrNew:     true,
@@ -340,6 +355,7 @@ func (w *worker) publishFileCompleted(ctx context.Context, event importjob.FileC
 	defer span.End()
 	if err := w.publisher.PublishObjectsChanged(ctx, events.ObjectsChanged{
 		Digest:      event.Digest,
+		SampleLimit: event.SampleLimit,
 		RunID:       event.RunID,
 		Kind:        string(event.Kind),
 		Region:      event.Region,
@@ -357,7 +373,7 @@ func (w *worker) publishFileCompleted(ctx context.Context, event importjob.FileC
 // XSD, битый XML или ZIP, отсутствующий объект/бакет S3, некорректные
 // параметры запроса) повторная доставка не исправит — сообщение терминируется.
 func isPermanent(err error) bool {
-	if errors.Is(err, importjob.ErrResumeMismatch) || errors.Is(err, errBadRequest) || errors.Is(err, importjob.ErrNoSelectedFiles) || errors.Is(err, io.ErrUnexpectedEOF) {
+	if errors.Is(err, importjob.ErrReleaseOrder) || errors.Is(err, importjob.ErrResumeMismatch) || errors.Is(err, errBadRequest) || errors.Is(err, importjob.ErrNoSelectedFiles) || errors.Is(err, io.ErrUnexpectedEOF) {
 		return true
 	}
 	var recordErr *gar.RecordError

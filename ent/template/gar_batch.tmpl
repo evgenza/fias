@@ -7,6 +7,7 @@ import (
     "context"
     "fmt"
     "entgo.io/ent/dialect"
+ "entgo.io/ent/dialect/sql"
     "gar-importer/internal/gar"
     "gar-importer/internal/gartype"
     "gar-importer/internal/gar/record"
@@ -138,7 +139,7 @@ func (b *gar{{ $n.Name }}Batch) Save(ctx context.Context) error {
 
 func (b *gar{{ $n.Name }}Batch) saveOnce(ctx context.Context, client *Client) error {
     err := client.{{ $n.Name }}.CreateBulk(b.builders...).
-        OnConflictColumns({{ if eq $n.Name "Param" }}"source", "source_id"{{ else }}"{{ $n.ID.StorageKey }}"{{ end }}).
+        OnConflict(sql.ConflictColumns({{ if eq $n.Name "Param" }}"source", "source_id"{{ else }}"{{ $n.ID.StorageKey }}"{{ end }}){{ range $f := $n.Fields }}{{ if eq $f.Name "update_date" }}, sql.UpdateWhere(sql.P(func(b *sql.Builder) { b.WriteString(`excluded.update_date >= "{{ $n.Table }}".update_date`) })){{ end }}{{ end }}).
         Update(func(u *{{ $n.Name }}Upsert) {
             {{ range $f := $n.Fields }}{{ if not $f.Immutable }}
             u.Update{{ $f.StructField }}()

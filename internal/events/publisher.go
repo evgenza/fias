@@ -38,15 +38,12 @@ func (p *Publisher) PublishImportRequested(ctx context.Context, event ImportRequ
 }
 
 // PublishObjectsChanged публикует уведомление о записанных объектах;
-// Nats-Msg-Id = "<runID>:<path>".
+// Nats-Msg-Id = "<digest>:<path>"; legacy events fall back to runID.
 func (p *Publisher) PublishObjectsChanged(ctx context.Context, event ObjectsChanged) error {
 	if event.SchemaVersion == 0 {
 		event.SchemaVersion = SchemaVersion1
 	}
-	msgID := fmt.Sprintf("%d:%s", event.RunID, event.Path)
-	if event.Digest != "" {
-		msgID = event.Digest + ":" + event.Path
-	}
+	msgID := objectsChangedMsgID(event)
 	if err := p.publish(ctx, SubjectObjectsChanged, msgID, event); err != nil {
 		return fmt.Errorf("objects changed запуска %d (%s): %w", event.RunID, event.Path, err)
 	}
@@ -81,4 +78,16 @@ func (p *Publisher) publish(ctx context.Context, subject, msgID string, event an
 		return nil
 	}
 	return fmt.Errorf("events: публикация %s после %d попыток: %w", subject, publishAttempts, lastErr)
+}
+
+func objectsChangedMsgID(event ObjectsChanged) string {
+	id := fmt.Sprintf("%d:%s", event.RunID, event.Path)
+	if event.Digest != "" {
+		id = event.Digest + ":" + event.Path
+	}
+	// A preview must never suppress the later full import in JetStream's dedup window.
+	if event.SampleLimit > 0 {
+		id += fmt.Sprintf(":sample:%d", event.SampleLimit)
+	}
+	return id
 }

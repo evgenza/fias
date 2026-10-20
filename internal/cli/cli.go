@@ -172,6 +172,9 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	regionList := flags.String("regions", "", "коды регионов через запятую; справочники включаются всегда")
 	formatList := flags.String("formats", "", "форматы через запятую, например AS_HOUSES,AS_ADDR_OBJ,AS_HOUSES_PARAMS")
 	limit := flags.Int64("limit-per-file", 0, "первые N записей каждого XML для теста; 0 — весь файл")
+	mode := flags.String("mode", "", "snapshot или delta (авто по имени ZIP)")
+	baseRelease := flags.String("base-release", "", "базовый выпуск дельты YYYYMMDD")
+	targetRelease := flags.String("target-release", "", "целевой выпуск YYYYMMDD")
 	resume := flags.Bool("resume", false, "продолжить последний незавершённый запуск этого архива")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("%w: %w", ErrUsage, err)
@@ -179,7 +182,7 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if *archivePath == "" || flags.NArg() != 0 {
 		return fmt.Errorf("%w: используйте import --zip /путь/gar_xml.zip", ErrUsage)
 	}
-	options := importjob.Options{BatchSize: *batchSize, LimitPerFile: *limit}
+	options := importjob.Options{Mode: *mode, BaseRelease: *baseRelease, TargetRelease: *targetRelease, BatchSize: *batchSize, LimitPerFile: *limit}
 	if *resume {
 		options.ResumeRunID = -1
 	}

@@ -166,7 +166,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Исправление:** если для того же digest уже есть run в состоянии `ready` —
   сразу Ack с логом; Msg-Id событий строить от digest, а не от runID.
 
-### [ ] B4. Нет контроля порядка дельт, upsert безусловный — Critical
+### [x] B4. Нет контроля порядка дельт, upsert безусловный — Critical
 - **Зависимости:** B3. Перед кодом нужен короткий дизайн в
   `docs/decisions.md`.
 - **Файлы:** `ent/template/gar_batch.tmpl` (upsert), `internal/control/control.go`
@@ -648,3 +648,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | C4 | [x] | Address analyzers: ngram 1..20, query truncate, yo normalization, no stopwords. Versioned write alias + require_alias; explicit offline reindex/verification/atomic swap command and recovery docs. Search regressions, migration/failure/retry tests, build/vet/lint/unit/integration passed. |
 
 | 2026-10-20 | B3 | [x] | Ready-run проверяется под dataset lock с учётом отбора; digest в Msg-Id. Регрессия до исправления: два run/события, после: один. Build/vet/lint/unit прошли; общая integration-проверка запущена. Архив скачивается для проверки криптографического digest. |
+
+| 2026-10-20 | B4 | [x] | Дизайн в decisions: snapshot/delta, версии, проверка base/applied, резерв digest, последовательный retry и MaxAckPending=1. Upsert защищён update_date, Ent регенерирован. D2→D1, старый snapshot, пропуск выпуска и старая строка отвергаются. Build/vet/lint/unit и PostgreSQL-регрессии прошли; общая integration будет повторена после волны. |

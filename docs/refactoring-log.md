@@ -283,3 +283,7 @@ Address analyzers normalize yo to e without stopwords; prefix ngrams cover 1..20
 ## B3 — повторная задача импорта
 
 Готовый запуск с тем же digest и отбором повторно используется под блокировкой dataset. События используют digest + путь как Msg-Id (старые события без digest совместимы). Для установления digest содержимое S3 скачивается; ETag не считается SHA-256.
+
+## B4 — порядок выпусков
+
+Импорт принимает mode/base_release/target_release (CLI: --mode, --base-release, --target-release; такие же поля в NATS). Snapshot определяет выпуск из version.txt/имён XML, delta требует явной базовой версии и полного отбора. Только полный неограниченный импорт продвигает applied_release. Старые архивы и разрывы цепочки отклоняются до записи. Неудавшийся архив резервирует dataset до успешного resume; другой архив ждёт восстановления. Worker держит текущую задачу при временных ошибках, MaxAckPending=1 сохраняет порядок после рестарта. Upsert не понижает update_date.
