@@ -44,6 +44,9 @@ func (p *Publisher) PublishObjectsChanged(ctx context.Context, event ObjectsChan
 		event.SchemaVersion = SchemaVersion1
 	}
 	msgID := fmt.Sprintf("%d:%s", event.RunID, event.Path)
+	if event.Digest != "" {
+		msgID = event.Digest + ":" + event.Path
+	}
 	if err := p.publish(ctx, SubjectObjectsChanged, msgID, event); err != nil {
 		return fmt.Errorf("objects changed запуска %d (%s): %w", event.RunID, event.Path, err)
 	}

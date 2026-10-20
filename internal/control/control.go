@@ -10,6 +10,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	"gar-importer/internal/importjob"
 )
 
 // Schema — служебная схема управления.
@@ -344,4 +346,24 @@ func (j *Journal) RunOptions(ctx context.Context, runID int64) (string, error) {
 func (j *Journal) ResumeRun(ctx context.Context, runID int64) error {
 	_, err := j.db.ExecContext(ctx, fmt.Sprintf(`UPDATE %s.import_runs SET state = 'loading', finished_at = NULL, error = NULL WHERE id = $1`, Schema), runID)
 	return err
+}
+
+// ReadyRun finds a completed import with the same content and selection under the dataset lock.
+func (j *Journal) ReadyRun(ctx context.Context, digest string, options importjob.Options) (int64, error) {
+	rows, err := j.db.QueryContext(ctx, `SELECT id, options FROM gar_control.import_runs WHERE source_digest=$1 AND state='ready' ORDER BY id DESC`, digest)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var saved string
+		if err := rows.Scan(&id, &saved); err != nil {
+			return 0, err
+		}
+		if importjob.MatchesSelection(saved, options) {
+			return id, nil
+		}
+	}
+	return 0, rows.Err()
 }

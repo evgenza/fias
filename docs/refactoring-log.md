@@ -279,3 +279,7 @@ Builder serializes dictionary loading with a mutex and returns immutable snapsho
 ## Wave 1 / C4 (2026-10-20)
 
 Address analyzers normalize yo to e without stopwords; prefix ngrams cover 1..20 characters and query tokens truncate to 20. Full text retains complete tokens for fuzzy search. ES_INDEX now names a write alias to ES_INDEX-v2 with mapping version metadata; bulk requires an alias and cannot auto-create dynamic mappings. Fresh installations create mapping and alias atomically. Legacy physical indices require the explicit offline command cmd/gar-search-migrate: stop writers, block legacy writes, refresh, reindex, reject failures/timeouts/count mismatches, then atomically replace the legacy physical index with the alias. Failed copies preserve the source and can be retried. README and docs/search-index-migration.md explain recovery and snapshot/rollback requirements. No live platform migration was run. Real ES tests cover short/long tokens, yo/e, stopword preservation, migration and retry after mapping failure, idempotence and alias guards. Build/vet/lint/unit/integration passed.
+
+## B3 — повторная задача импорта
+
+Готовый запуск с тем же digest и отбором повторно используется под блокировкой dataset. События используют digest + путь как Msg-Id (старые события без digest совместимы). Для установления digest содержимое S3 скачивается; ETag не считается SHA-256.

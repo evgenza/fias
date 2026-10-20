@@ -117,8 +117,11 @@ func TestZIPToAllTables(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(report.Files) != 28 || report.Decoded != 29 || report.Written != 28 || report.Filtered != 1 || len(report.Skipped) != 1 || report.Ignored != 1 {
+		if run == 1 && (len(report.Files) != 28 || report.Decoded != 29 || report.Written != 28 || report.Filtered != 1 || len(report.Skipped) != 1 || report.Ignored != 1) {
 			t.Fatalf("run %d: unexpected report %+v", run, report)
+		}
+		if run == 2 && (report.RunID != 1 || len(report.Files) != 0) {
+			t.Fatalf("duplicate run: %+v", report)
 		}
 		for _, fixture := range fixtures {
 			entity := reflect.ValueOf(db.Client).Elem().FieldByName(fixture.Model)

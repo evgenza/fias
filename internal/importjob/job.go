@@ -111,13 +111,15 @@ type Options struct {
 	// digest, режим и параметры отбора.
 	ResumeRunID int64
 	// ResumeOrNew permits a fresh run when automatic resume has no candidate.
-	ResumeOrNew bool
+	ResumeOrNew  bool
+	sourceDigest string
 }
 
 // FileCompletedEvent — событие успешной обработки одного файла плана:
 // данные закоммичены, целостность файла подтверждена полным чтением.
 type FileCompletedEvent struct {
 	RunID       int64
+	Digest      string
 	Kind        gar.Kind
 	Source      string // нормализованное семейство параметров (для PARAM)
 	Region      int    // 0 — общероссийский справочник
@@ -183,6 +185,7 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 	if err != nil {
 		return report, err
 	}
+	options.sourceDigest = digest
 	var (
 		runID       int64
 		complete    map[string]int64
@@ -193,6 +196,20 @@ func run(ctx context.Context, source Archive, writers WriterFactory, journal Jou
 			return report, err
 		}
 		defer releaseLock()
+		if options.ResumeOrNew && options.LimitPerFile == 0 {
+			if ready, ok := journal.(interface {
+				ReadyRun(context.Context, string, Options) (int64, error)
+			}); ok {
+				id, readyErr := ready.ReadyRun(ctx, digest, options)
+				if readyErr != nil {
+					return report, readyErr
+				}
+				if id != 0 {
+					report.RunID = id
+					return report, nil
+				}
+			}
+		}
 		runID, err = beginRun(ctx, journal, source, digest, options)
 		if err != nil {
 			return report, err
@@ -397,7 +414,7 @@ func importFile(ctx context.Context, source Archive, writers WriterFactory, jour
 	if options.OnFileCompleted != nil {
 		event := FileCompletedEvent{
 			RunID: runID, Kind: entry.Kind, Source: entry.Source, Region: entry.Region,
-			Path: entry.Path, Written: writer.WriteOps(), CompletedAt: time.Now(),
+			Digest: options.sourceDigest, Path: entry.Path, Written: writer.WriteOps(), CompletedAt: time.Now(),
 		}
 		if err := options.OnFileCompleted(ctx, event); err != nil {
 			if journal != nil {
@@ -484,4 +501,9 @@ func validateResumeOptions(saved string, requested Options) error {
 		return fmt.Errorf("%w: изменились параметры Regions/Kinds/Sources/LimitPerFile", ErrResumeMismatch)
 	}
 	return nil
+}
+
+// MatchesSelection compares the data selection independently of operational settings.
+func MatchesSelection(saved string, options Options) bool {
+	return validateResumeOptions(saved, options) == nil
 }

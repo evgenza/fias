@@ -30,6 +30,7 @@ type ImportRequested struct {
 // ObjectsChanged — уведомление о записанных объектах по файлу плана импорта.
 type ObjectsChanged struct {
 	SchemaVersion int       `json:"schema_version"`
+	Digest        string    `json:"digest,omitempty"`
 	RunID         int64     `json:"run_id"`
 	Kind          string    `json:"kind"`
 	Region        int       `json:"region"`

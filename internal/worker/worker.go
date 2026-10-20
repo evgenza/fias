@@ -339,6 +339,7 @@ func (w *worker) publishFileCompleted(ctx context.Context, event importjob.FileC
 	))
 	defer span.End()
 	if err := w.publisher.PublishObjectsChanged(ctx, events.ObjectsChanged{
+		Digest:      event.Digest,
 		RunID:       event.RunID,
 		Kind:        string(event.Kind),
 		Region:      event.Region,

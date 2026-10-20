@@ -158,7 +158,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Готово, когда:** интеграционный тест «Ctrl-C → `--resume`» продолжает тот же
   run и не перезаписывает завершённые файлы.
 
-### [ ] B3. Идемпотентность задачи импорта — High
+### [x] B3. Идемпотентность задачи импорта — High
 - **Зависимости:** A1, B2.
 - **Файлы:** `internal/worker/worker.go`, `internal/control/control.go`.
 - **Проблема:** повторная задача с тем же архивом заново скачивает и импортирует
@@ -646,3 +646,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | C1 | [x] | Mutex-protected immutable dictionaries, no empty cache, 1 minute TTL and invalidation on type events. Empty/import/TTL/invalidation and parallel DescribeObject tests pass under race detector; build/vet/lint/unit/integration passed. |
 
 | 2026-10-20 | C4 | [x] | Address analyzers: ngram 1..20, query truncate, yo normalization, no stopwords. Versioned write alias + require_alias; explicit offline reindex/verification/atomic swap command and recovery docs. Search regressions, migration/failure/retry tests, build/vet/lint/unit/integration passed. |
+
+| 2026-10-20 | B3 | [x] | Ready-run проверяется под dataset lock с учётом отбора; digest в Msg-Id. Регрессия до исправления: два run/события, после: один. Build/vet/lint/unit прошли; общая integration-проверка запущена. Архив скачивается для проверки криптографического digest. |
