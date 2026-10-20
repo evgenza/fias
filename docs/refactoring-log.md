@@ -271,3 +271,7 @@ Checkpoint получает committed+received (адаптер добавляе�
 ## Wave 1 / B2 (2026-10-20)
 
 Worker uses ResumeRunID=-1 with ResumeOrNew=true. Resume validates digest, mode, Regions/Kinds/Sources and LimitPerFile as normalized sets; batch size may change. All unfinished states are eligible. Selection and status reset to loading run under the dataset lock, released after FinishRun. Incompatible resume is permanent. Removed unused Options.SchemaName: storage/Ent use gar. Cancellation/resume of the same run, completed-file skipping, filter validation and all required checks passed.
+
+## Wave 1 / C1 (2026-10-20)
+
+Builder serializes dictionary loading with a mutex and returns immutable snapshots. Empty startup results are not cached; other snapshots expire after one minute. The indexer invalidates the cache on region-0 house/add-house/apartment/room type events; API instances refresh via TTL. Real PostgreSQL tests reproduced the stale empty cache and a data race before the fix. Empty-to-import, TTL, invalidation and 24 concurrent DescribeObject callers now pass with -race. All required checks passed.

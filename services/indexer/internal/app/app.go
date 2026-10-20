@@ -175,6 +175,10 @@ func (s *service) handle(ctx context.Context, msg events.ObjectsChangedMsg) {
 	// Корневые справочники (регион 0): типы учитываются при чтении данных,
 	// пересборка не требуется (задел на будущее).
 	if event.Region == 0 {
+		switch gar.Kind(event.Kind) {
+		case gar.KindHouseTypes, gar.KindAddHouseTypes, gar.KindApartmentTypes, gar.KindRoomTypes:
+			s.builder.InvalidateDictionaries()
+		}
 		log.Debug("корневой справочник, индексация не требуется")
 		s.metrics.events.WithLabelValues(event.Kind, "skipped").Inc()
 		if err := msg.Ack(); err != nil {

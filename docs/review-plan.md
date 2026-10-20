@@ -241,7 +241,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 
 ## C. Индексатор, сборка адресов, Elasticsearch
 
-### [ ] C1. Справочники типов: гонка данных и вечный кэш — High
+### [x] C1. Справочники типов: гонка данных и вечный кэш — High
 - **Файлы:** `internal/address/builder.go` (`dictionaries` ~465–485),
   `internal/address/describe.go` (~224, 285), `services/indexer/internal/app/app.go`
   (~177–184: события региона 0 подтверждаются без действий).
@@ -642,3 +642,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | B1 | [x] | Checkpoint накопительный; счётчики/callback/очистка пакета после COMMIT, decoded bigint с обновлением существующей таблицы. Ent регенерирован. Регрессии на четырёх пакетах, точном resume и deferred COMMIT failure; build/vet/lint/unit/integration с отдельной PostgreSQL прошли. |
 
 | 2026-10-20 | B2 | [x] | Auto-resume failed/canceled/loading/planned; worker fallback, selection validation, loading status under lock, removed SchemaName. Ctrl-C/resume same ID and skip-complete regressions; build/vet/lint/unit/integration passed. |
+
+| 2026-10-20 | C1 | [x] | Mutex-protected immutable dictionaries, no empty cache, 1 minute TTL and invalidation on type events. Empty/import/TTL/invalidation and parallel DescribeObject tests pass under race detector; build/vet/lint/unit/integration passed. |

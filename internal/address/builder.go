@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gar-importer/internal/search"
@@ -121,8 +122,10 @@ type dictionaries struct {
 
 // Builder строит поисковые документы адресов по данным PostgreSQL.
 type Builder struct {
-	store *storage.Store
-	dicts *dictionaries
+	store         *storage.Store
+	dicts         *dictionaries
+	dictsMu       sync.Mutex
+	dictsLoadedAt time.Time
 }
 
 // NewBuilder создаёт сборщика поверх хранилища.
@@ -461,9 +464,21 @@ func each(rows *sql.Rows, fn func() error) error {
 	return rows.Err()
 }
 
-// dictionaries лениво загружает справочники типов (один раз на сборщик).
+// DictionaryTTL bounds staleness for API processes without an event subscription.
+const DictionaryTTL = time.Minute
+
+// InvalidateDictionaries invalidates the immutable dictionary snapshot.
+func (b *Builder) InvalidateDictionaries() {
+	b.dictsMu.Lock()
+	defer b.dictsMu.Unlock()
+	b.dicts = nil
+}
+
+// dictionaries serializes loading and publishes immutable snapshots.
 func (b *Builder) dictionaries(ctx context.Context) (*dictionaries, error) {
-	if b.dicts != nil {
+	b.dictsMu.Lock()
+	defer b.dictsMu.Unlock()
+	if b.dicts != nil && time.Since(b.dictsLoadedAt) < DictionaryTTL {
 		return b.dicts, nil
 	}
 	dicts := &dictionaries{}
@@ -480,7 +495,13 @@ func (b *Builder) dictionaries(ctx context.Context) (*dictionaries, error) {
 	if dicts.roomTypes, err = b.loadTypeDict(ctx, "gar.room_types"); err != nil {
 		return nil, err
 	}
-	b.dicts = dicts
+	// Empty startup results must be retried on the next request.
+	if len(dicts.houseTypes)+len(dicts.addHouseTypes)+len(dicts.apartTypes)+len(dicts.roomTypes) > 0 {
+		b.dicts = dicts
+		b.dictsLoadedAt = time.Now()
+	} else {
+		b.dicts = nil
+	}
 	return dicts, nil
 }
 
