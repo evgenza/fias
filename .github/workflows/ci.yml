@@ -81,6 +81,10 @@ jobs:
     name: Сквозной smoke compose-стека
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # RAM раннера ~7 ГБ: heap ES ужат; env на уровне job, чтобы одинаковая
+    # конфигурация ES действовала во всех шагах (иначе compose пересоздаст).
+    env:
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
     steps:
       - name: Исходники
         uses: actions/checkout@v4
@@ -102,8 +106,10 @@ jobs:
       # --wait только на long-running сервисах: для one-shot (migrate,
       # minio-init, kibana-init) `up --wait` на compose v2 падает, поэтому
       # one-shot сервисы запускаются отдельным шагом ниже.
+      # Kibana и Jaeger в CI не поднимаем: smoke их не проверяет, а RAM раннера
+      # ограничена (~7 ГБ); heap ES ужат до 512m через ES_JAVA_OPTS.
       - name: Инфраструктура (postgres, elasticsearch, nats, minio, ...)
-        run: docker compose up -d --build --wait postgres elasticsearch nats minio redis prometheus grafana jaeger kibana
+        run: docker compose up -d --build --wait postgres elasticsearch nats minio redis prometheus grafana
 
       - name: "One-shot: миграции схемы и бакет MinIO"
         run: |

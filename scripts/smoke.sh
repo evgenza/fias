@@ -3,11 +3,16 @@
 # health, событийный конвейер на фикстуре, REST (HTTP/2), gRPC, метрики.
 # Использование: scripts/smoke.sh [--with-seed]
 #   --with-seed  сгенерировать фикстуру и прогнать полный конвейер импорта.
+# На свежеподнятом стеке (CI) готовность и targets Prometheus могут отставать,
+# поэтому ключевые проверки идут с ретраями (SMOKE_WAIT секунд на проверку).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 WITH_SEED="${1:-}"
 FAILURES=0
+SMOKE_WAIT="${SMOKE_WAIT:-60}"        # бюджет ожидания на одну проверку
+SCRAPE_WAIT="${SCRAPE_WAIT:-120}"     # бюджет на появление targets в Prometheus
+INDEX_WAIT="${INDEX_WAIT:-180}"       # бюджет на индексацию фикстуры
 
 check() { # check <описание> <команда...>
   local desc="$1"; shift
@@ -19,19 +24,33 @@ check() { # check <описание> <команда...>
   fi
 }
 
+check_wait() { # check_wait <секунды> <описание> <команда...>
+  local budget="$1" desc="$2"; shift 2
+  local deadline=$((SECONDS + budget))
+  until "$@" >/dev/null 2>&1; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "FAIL: $desc (не дождались за ${budget}s)" >&2
+      FAILURES=$((FAILURES + 1))
+      return
+    fi
+    sleep 3
+  done
+  echo "PASS: $desc"
+}
+
 echo "==> состояние контейнеров"
 docker compose ps
 
 echo "==> health/readiness"
-check "address-api /healthz"        curl -sf http://127.0.0.1:8080/healthz
-check "address-api /readyz"         curl -sf http://127.0.0.1:8080/readyz
-check "suggester /readyz"           curl -sf http://127.0.0.1:9213/readyz
-check "indexer /readyz"             curl -sf http://127.0.0.1:9212/readyz
-check "importer /readyz"            curl -sf http://127.0.0.1:9211/readyz
-check "elasticsearch"               curl -sf http://127.0.0.1:9200
-check "prometheus ready"            curl -sf http://127.0.0.1:9090/-/ready
-check "grafana health"              curl -sf http://127.0.0.1:3000/api/health
-check "minio live"                  curl -sf http://127.0.0.1:9000/minio/health/live
+check_wait "$SMOKE_WAIT" "address-api /healthz"   curl -sf http://127.0.0.1:8080/healthz
+check_wait "$SMOKE_WAIT" "address-api /readyz"    curl -sf http://127.0.0.1:8080/readyz
+check_wait "$SMOKE_WAIT" "suggester /readyz"      curl -sf http://127.0.0.1:9213/readyz
+check_wait "$SMOKE_WAIT" "indexer /readyz"        curl -sf http://127.0.0.1:9212/readyz
+check_wait "$SMOKE_WAIT" "importer /readyz"       curl -sf http://127.0.0.1:9211/readyz
+check_wait "$SMOKE_WAIT" "elasticsearch"          curl -sf http://127.0.0.1:9200
+check_wait "$SMOKE_WAIT" "prometheus ready"       curl -sf http://127.0.0.1:9090/-/ready
+check_wait "$SMOKE_WAIT" "grafana health"         curl -sf http://127.0.0.1:3000/api/health
+check_wait "$SMOKE_WAIT" "minio live"             curl -sf http://127.0.0.1:9000/minio/health/live
 
 echo "==> REST API"
 check "openapi.yaml"                curl -sf http://127.0.0.1:8080/openapi.yaml
@@ -42,7 +61,7 @@ check "suggest 400 на пустой q"     test "$(curl -s -o /dev/null -w '%{h
 
 echo "==> prometheus targets (приложения)"
 for job in importer indexer suggester address-api; do
-  check "target $job UP" bash -c "curl -sf 'http://127.0.0.1:9090/api/v1/targets?state=active' | grep -q '\"job\":\"$job\".*\"health\":\"up\"'"
+  check_wait "$SCRAPE_WAIT" "target $job UP" bash -c "curl -sf 'http://127.0.0.1:9090/api/v1/targets?state=active' | grep -q '\"job\":\"$job\".*\"health\":\"up\"'"
 done
 
 if [ "$WITH_SEED" = "--with-seed" ]; then
@@ -50,15 +69,17 @@ if [ "$WITH_SEED" = "--with-seed" ]; then
   mkdir -p build
   go run ./cmd/gar-mkfixture --out build/tiny-gar.zip
   scripts/seed-demo.sh build/tiny-gar.zip
-  echo "==> ожидание индексации (до 120s)"
-  for i in $(seq 1 24); do
+  echo "==> ожидание индексации (до ${INDEX_WAIT}s)"
+  COUNT=""
+  deadline=$((SECONDS + INDEX_WAIT))
+  while [ "$SECONDS" -lt "$deadline" ]; do
     COUNT="$(curl -s http://127.0.0.1:9200/gar-addresses/_count 2>/dev/null | grep -o '"count":[0-9]*' | cut -d: -f2 || true)"
     [ "${COUNT:-0}" -gt 0 ] && break
     sleep 5
   done
   echo "    документов в gar-addresses: ${COUNT:-0}"
   check "индекс наполнен" test "${COUNT:-0}" -gt 0
-  check "suggest находит улицу фикстуры" bash -c "curl -sf 'http://127.0.0.1:8080/api/v1/suggest?q=первая' | grep -qi 'первая'"
+  check_wait "$SMOKE_WAIT" "suggest находит улицу фикстуры" bash -c "curl -sf 'http://127.0.0.1:8080/api/v1/suggest?q=первая' | grep -qi 'первая'"
 fi
 
 if [ "$FAILURES" -gt 0 ]; then
