@@ -51,7 +51,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 
 ## A. NATS и обработка событий (общее для importer и indexer)
 
-### [ ] A1. Повторная доставка во время долгой обработки — Critical
+### [x] A1. Повторная доставка во время долгой обработки — Critical
 - **Файлы:** `internal/events/subscriber.go` (consumer config ~110–118, `fetchBatch`
   ~18, `fetchLoop` ~136–174), `internal/worker/worker.go` (`handle` ~221–269),
   `services/indexer/internal/app/app.go` (~154–158, 206–221).
@@ -634,3 +634,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | A3 | [x] | Ошибки данных больше не повторяются как временные; диапазоны int64 по Ent-моделям, XSD enum, UUID, RecordError при декодировании, sentinel пустого выбора, ZIP/flate/SQLSTATE 22 и 23. Регрессии воспроизведены до исправления; build, vet, lint, unit, integration и оба генератора -verify прошли. |
 | 2026-10-20 | D3 | [x] | Ограничена кардинальность метрик и спанов; методы вне списка дают OTHER, имена спанов берутся из r.Pattern, удалённый sampled-флаг не управляет выборкой, baggage не переносится. Unit-тесты, build, vet, lint и integration прошли. |
 | 2026-10-20 | D1 | [x] | Readiness зависит от PostgreSQL, будит IDLE gRPC и публикует состояние Redis/suggester в метриках; клиент получает только not ready, подробности логируются. Тест на отказ необязательных зависимостей и пробуждение IDLE, build, vet, lint, unit и integration прошли. |
+
+| 2026-10-20 | A1 | [x] | NATS-тест подтвердил AckWait=BackOff[0]; явные 30 с, heartbeat 15 с, Fetch(1) с ожиданием Ack/Nak/Term, миграция durable. Обработчик 35 с без повторов; build, vet, lint, unit и integration прошли. |

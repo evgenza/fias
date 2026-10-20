@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -15,7 +16,8 @@ const (
 	// maxDeliver — максимум попыток доставки сообщения.
 	maxDeliver = 10
 	// fetchBatch — сообщений за один запрос к серверу.
-	fetchBatch = 16
+	fetchBatch      = 1
+	consumerAckWait = 30 * time.Second
 	// fetchMaxWait — ожидание сообщений в одном запросе.
 	fetchMaxWait = 2 * time.Second
 	// fetchRetryMin/Max — пределы экспоненциального backoff цикла выборки
@@ -23,13 +25,6 @@ const (
 	fetchRetryMin = 100 * time.Millisecond
 	fetchRetryMax = 5 * time.Second
 )
-
-// consumerBackOff — задержки повторной доставки (maxDeliver-1 записей:
-// сервер требует MaxDeliver <= len(BackOff)+1).
-var consumerBackOff = []time.Duration{
-	1 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second,
-	30 * time.Second, 30 * time.Second, 30 * time.Second, 30 * time.Second,
-}
 
 // Subscriber — durable pull-подписчик на события платформы.
 type Subscriber struct {
@@ -45,17 +40,19 @@ func NewSubscriber(js nats.JetStreamContext) *Subscriber {
 // и управлением подтверждением.
 type ImportRequestMsg struct {
 	Payload ImportRequested
-	msg     *nats.Msg
+	*delivery
 }
 
 // Ack подтверждает обработку сообщения.
-func (m ImportRequestMsg) Ack() error { return m.msg.Ack() }
+func (m ImportRequestMsg) Ack() error { return m.finish(func() error { return m.msg.Ack() }) }
 
 // Nak запрашивает повторную доставку через delay.
-func (m ImportRequestMsg) Nak(delay time.Duration) error { return m.msg.NakWithDelay(delay) }
+func (m ImportRequestMsg) Nak(delay time.Duration) error {
+	return m.finish(func() error { return m.msg.NakWithDelay(delay) })
+}
 
 // Term прекращает повторные доставки сообщения.
-func (m ImportRequestMsg) Term() error { return m.msg.Term() }
+func (m ImportRequestMsg) Term() error { return m.finish(func() error { return m.msg.Term() }) }
 
 // Metadata возвращает метаданные доставки JetStream (счётчик доставок и пр.).
 func (m ImportRequestMsg) Metadata() (*nats.MsgMetadata, error) { return m.msg.Metadata() }
@@ -64,17 +61,19 @@ func (m ImportRequestMsg) Metadata() (*nats.MsgMetadata, error) { return m.msg.M
 // и управлением подтверждением.
 type ObjectsChangedMsg struct {
 	Payload ObjectsChanged
-	msg     *nats.Msg
+	*delivery
 }
 
 // Ack подтверждает обработку сообщения.
-func (m ObjectsChangedMsg) Ack() error { return m.msg.Ack() }
+func (m ObjectsChangedMsg) Ack() error { return m.finish(func() error { return m.msg.Ack() }) }
 
 // Nak запрашивает повторную доставку через delay.
-func (m ObjectsChangedMsg) Nak(delay time.Duration) error { return m.msg.NakWithDelay(delay) }
+func (m ObjectsChangedMsg) Nak(delay time.Duration) error {
+	return m.finish(func() error { return m.msg.NakWithDelay(delay) })
+}
 
 // Term прекращает повторные доставки сообщения.
-func (m ObjectsChangedMsg) Term() error { return m.msg.Term() }
+func (m ObjectsChangedMsg) Term() error { return m.finish(func() error { return m.msg.Term() }) }
 
 // Metadata возвращает метаданные доставки JetStream (счётчик доставок и пр.).
 func (m ObjectsChangedMsg) Metadata() (*nats.MsgMetadata, error) { return m.msg.Metadata() }
@@ -83,12 +82,12 @@ func (m ObjectsChangedMsg) Metadata() (*nats.MsgMetadata, error) { return m.msg.
 // канал закрывается по отмене контекста. Сообщения с битым payload
 // отбрасываются (Term), чтобы не блокировать очередь.
 func (s *Subscriber) SubscribeImportRequests(ctx context.Context, durable string) (<-chan ImportRequestMsg, error) {
-	return subscribe(ctx, s.js, SubjectImportRequested, durable, func(msg *nats.Msg) (ImportRequestMsg, error) {
+	return subscribe(ctx, s.js, SubjectImportRequested, durable, func(d *delivery) (ImportRequestMsg, error) {
 		var payload ImportRequested
-		if err := json.Unmarshal(msg.Data, &payload); err != nil {
+		if err := json.Unmarshal(d.msg.Data, &payload); err != nil {
 			return ImportRequestMsg{}, err
 		}
-		return ImportRequestMsg{Payload: payload, msg: msg}, nil
+		return ImportRequestMsg{Payload: payload, delivery: d}, nil
 	})
 }
 
@@ -96,25 +95,24 @@ func (s *Subscriber) SubscribeImportRequests(ctx context.Context, durable string
 // durable-консьюмером; канал закрывается по отмене контекста. Сообщения
 // с битым payload отбрасываются (Term).
 func (s *Subscriber) SubscribeObjectsChanged(ctx context.Context, durable string) (<-chan ObjectsChangedMsg, error) {
-	return subscribe(ctx, s.js, SubjectObjectsChanged, durable, func(msg *nats.Msg) (ObjectsChangedMsg, error) {
+	return subscribe(ctx, s.js, SubjectObjectsChanged, durable, func(d *delivery) (ObjectsChangedMsg, error) {
 		var payload ObjectsChanged
-		if err := json.Unmarshal(msg.Data, &payload); err != nil {
+		if err := json.Unmarshal(d.msg.Data, &payload); err != nil {
 			return ObjectsChangedMsg{}, err
 		}
-		return ObjectsChangedMsg{Payload: payload, msg: msg}, nil
+		return ObjectsChangedMsg{Payload: payload, delivery: d}, nil
 	})
 }
 
 // subscribe создаёт консьюмер и запускает цикл выборки сообщений в канал.
-func subscribe[T any](ctx context.Context, js nats.JetStreamContext, subject, durable string, wrap func(*nats.Msg) (T, error)) (<-chan T, error) {
+func subscribe[T any](ctx context.Context, js nats.JetStreamContext, subject, durable string, wrap func(*delivery) (T, error)) (<-chan T, error) {
 	consumer := &nats.ConsumerConfig{
 		Durable:       durable,
 		FilterSubject: subject,
 		DeliverPolicy: nats.DeliverAllPolicy,
 		AckPolicy:     nats.AckExplicitPolicy,
-		AckWait:       30 * time.Second,
+		AckWait:       consumerAckWait,
 		MaxDeliver:    maxDeliver,
-		BackOff:       consumerBackOff,
 	}
 	if _, err := js.AddConsumer(StreamName, consumer, nats.Context(ctx)); err != nil {
 		// Консьюмер мог остаться с прежней конфигурацией: пробуем обновить.
@@ -133,8 +131,9 @@ func subscribe[T any](ctx context.Context, js nats.JetStreamContext, subject, du
 
 // fetchLoop выбирает сообщения пакетами и передаёт в канал до отмены
 // контекста; при недоступности сервера — экспоненциальный backoff.
-func fetchLoop[T any](ctx context.Context, subscription *nats.Subscription, out chan<- T, wrap func(*nats.Msg) (T, error)) {
+func fetchLoop[T any](ctx context.Context, subscription *nats.Subscription, out chan<- T, wrap func(*delivery) (T, error)) {
 	defer close(out)
+	defer func() { _ = subscription.Unsubscribe() }()
 	backoff := fetchRetryMin
 	for {
 		if ctx.Err() != nil {
@@ -159,17 +158,52 @@ func fetchLoop[T any](ctx context.Context, subscription *nats.Subscription, out 
 		}
 		backoff = fetchRetryMin
 		for _, msg := range msgs {
-			wrapped, err := wrap(msg)
+			d := &delivery{msg: msg, done: make(chan struct{})}
+			wrapped, err := wrap(d)
 			if err != nil {
 				_ = msg.Term()
 				continue
 			}
+			go d.heartbeat(ctx)
 			select {
 			case out <- wrapped:
 			case <-ctx.Done():
 				// Сообщение без Ack будет доставлено повторно по AckWait.
 				return
 			}
+			select {
+			case <-d.done:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+// delivery holds the lease until the handler acknowledges or rejects the message.
+type delivery struct {
+	msg  *nats.Msg
+	done chan struct{}
+	once sync.Once
+}
+
+func (d *delivery) finish(action func() error) error {
+	err := action()
+	d.once.Do(func() { close(d.done) })
+	return err
+}
+
+func (d *delivery) heartbeat(ctx context.Context) {
+	ticker := time.NewTicker(consumerAckWait / 2)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-d.done:
+			return
+		case <-ticker.C:
+			_ = d.msg.InProgress()
 		}
 	}
 }

@@ -214,3 +214,57 @@ func equalObjectsChanged(got, want events.ObjectsChanged) bool {
 		got.Kind == want.Kind && got.Region == want.Region && got.Path == want.Path &&
 		got.Written == want.Written && got.CompletedAt.Equal(want.CompletedAt)
 }
+
+func TestLongProcessingAndExistingConsumer(t *testing.T) {
+	_, js := connectJetStream(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if _, err := events.EnsureStream(ctx, js); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := js.AddConsumer(events.StreamName, &nats.ConsumerConfig{
+		Durable: "long-processing", FilterSubject: events.SubjectImportRequested,
+		AckPolicy: nats.AckExplicitPolicy, MaxDeliver: 10, BackOff: []time.Duration{time.Second},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	requests, err := events.NewSubscriber(js).SubscribeImportRequests(ctx, "long-processing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := js.ConsumerInfo(events.StreamName, "long-processing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Config.AckWait != 30*time.Second || len(info.Config.BackOff) != 0 {
+		t.Fatalf("consumer was not migrated: %+v", info.Config)
+	}
+	for _, id := range []string{"long", "next"} {
+		if err := events.NewPublisher(js).PublishImportRequested(ctx, events.ImportRequested{RequestID: id, Key: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first := receive(t, requests)
+	select {
+	case extra := <-requests:
+		t.Fatalf("fetched while busy: %+v", extra.Payload)
+	case <-time.After(35 * time.Second):
+	}
+	info, err = js.ConsumerInfo(events.StreamName, "long-processing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Delivered.Consumer != 1 {
+		t.Fatalf("deliveries while busy: %d", info.Delivered.Consumer)
+	}
+	if err := first.Ack(); err != nil {
+		t.Fatal(err)
+	}
+	next := receive(t, requests)
+	if next.Payload.RequestID != "next" {
+		t.Fatalf("duplicate delivery: %+v", next.Payload)
+	}
+	if err := next.Ack(); err != nil {
+		t.Fatal(err)
+	}
+}
