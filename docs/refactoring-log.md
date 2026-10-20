@@ -295,3 +295,9 @@ Address analyzers normalize yo to e without stopwords; prefix ngrams cover 1..20
 ## C3 — каскад событий индексатора
 
 Изменения предков, реестра, административной иерархии и параметров пересобирают зависимые документы региона. Муниципальная иерархия не используется адресным сборщиком и не вызывает пересборку. Выбран явный граф зависимостей вместо debounce по журналу: каждое событие можно независимо повторить.
+
+## C6 - current documents and stale index cleanup
+
+Hierarchy is resolved across regions before checking the requested region. Inactive/non-actual objects are excluded. A successful regional kind rebuild refreshes Elasticsearch and deletes older documents of that region and kind. Failed builds skip cleanup; delete_by_query timeouts, conflicts and failures fail the event.
+
+Wave 2 verification: build/vet/lint/unit and full integration passed. Preview events include sample_limit in Msg-Id to preserve the subsequent full-import event. Ready archive skips are logged. source_release protects data loaded by partial imports; only full imports advance applied_release.

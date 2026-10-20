@@ -161,6 +161,33 @@ func TestIndexerHousesEndToEnd(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	// Deactivation removes the previous document after a successful empty house rebuild.
+	if _, err := store.Exec(ctx, `UPDATE gar.houses SET is_active=false WHERE object_id=$1`, houseObjID); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishObjectsChanged(ctx, events.ObjectsChanged{RunID: 4, Kind: "AS_HOUSES", Region: 77, Path: "77/AS_HOUSES_20261020_2.XML", CompletedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	deadline = time.Now().Add(20 * time.Second)
+	for {
+		resp, err := searchClient.ES().Get(searchClient.IndexName(), strconv.FormatInt(houseObjID, 10), searchClient.ES().Get.WithContext(ctx))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusNotFound {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("inactive house remains in Elasticsearch")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	// Cleanup of houses must preserve indexed address objects.
+	if doc := pollDocument(t, ctx, searchClient, strconv.FormatInt(streetObjID, 10)); doc.FullAddress != "г Москва, ул Новая" {
+		t.Fatalf("unrelated kind removed: %+v", doc)
+	}
+
 	// Завершаем сервис штатно.
 	stopApp()
 	select {

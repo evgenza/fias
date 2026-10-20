@@ -274,3 +274,49 @@ const indexMapping = `{
     }
   }
 }`
+
+// DeleteStale removes obsolete documents only after a successful regional kind rebuild.
+// Refresh exposes all completed bulk writes before delete_by_query takes its snapshot.
+func (c *Client) DeleteStale(ctx context.Context, region, kind string, started time.Time) error {
+	resp, err := c.es.Indices.Refresh(c.es.Indices.Refresh.WithContext(ctx), c.es.Indices.Refresh.WithIndex(c.index))
+	if err != nil {
+		return fmt.Errorf("search: refresh before cleanup: %w", err)
+	}
+	_, readErr := io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if resp.IsError() {
+		return fmt.Errorf("search: refresh before cleanup: %s", resp.Status())
+	}
+	query := map[string]any{"query": map[string]any{"bool": map[string]any{"filter": []any{
+		map[string]any{"term": map[string]any{"region": region}},
+		map[string]any{"term": map[string]any{"kind": kind}},
+		map[string]any{"range": map[string]any{"indexed_at": map[string]any{"lt": started.UTC().Format(time.RFC3339Nano)}}},
+	}}}}
+	body, err := json.Marshal(query)
+	if err != nil {
+		return err
+	}
+	resp, err = c.es.DeleteByQuery([]string{c.index}, bytes.NewReader(body), c.es.DeleteByQuery.WithContext(ctx), c.es.DeleteByQuery.WithRefresh(true))
+	if err != nil {
+		return fmt.Errorf("search: cleanup: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.IsError() {
+		return fmt.Errorf("search: cleanup: %s", resp.Status())
+	}
+	var result struct {
+		TimedOut         bool              `json:"timed_out"`
+		VersionConflicts int64             `json:"version_conflicts"`
+		Failures         []json.RawMessage `json:"failures"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("search: cleanup response: %w", err)
+	}
+	if result.TimedOut || result.VersionConflicts > 0 || len(result.Failures) > 0 {
+		return fmt.Errorf("search: incomplete cleanup: timeout=%t conflicts=%d failures=%d", result.TimedOut, result.VersionConflicts, len(result.Failures))
+	}
+	return nil
+}

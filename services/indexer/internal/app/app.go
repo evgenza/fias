@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -266,12 +267,16 @@ func (s *service) routeTasks(kind gar.Kind) ([]buildTask, bool) {
 // документов индексируются в Elasticsearch по мере готовности.
 func (s *service) buildAll(ctx context.Context, region int, tasks []buildTask) error {
 	for _, task := range tasks {
+		started := time.Now().UTC().Truncate(time.Millisecond)
 		sink := func(docs []search.Document) error {
 			indexed, err := s.search.BulkIndex(ctx, docs)
 			s.metrics.documents.WithLabelValues(task.docKind).Add(float64(indexed))
 			return err
 		}
 		if err := task.build(ctx, region, sink); err != nil {
+			return err
+		}
+		if err := s.search.DeleteStale(ctx, strconv.Itoa(region), task.docKind, started); err != nil {
 			return err
 		}
 	}

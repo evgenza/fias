@@ -333,7 +333,7 @@ suggester, инфраструктура и CI. Находки сверены с 
     только для неустранимых;
   - `ResponseHeaderTimeout` и контекст с дедлайном на bulk.
 
-### [ ] C6. Устаревшие документы и запись из чужого региона — Medium
+### [x] C6. Устаревшие документы и запись из чужого региона — Medium
 - **Файлы:** `internal/address/builder.go` (~26–29), `internal/search/search.go`.
 - **Проблема:**
   - документы объектов, ушедших из региона или деактивированных, не удаляются;
@@ -654,3 +654,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | C2 | [x] | Региональные object_id → LATERAL latest, keyset по 2000 с закрытием rows до обогащения/sink; безопасный CASE и индексы в Ent/миграции. Тест с одним соединением падал на deadline, теперь 2001 дом/2 страницы с прежними адресами; EXPLAIN без Seq Scan houses/adm_hierarchy на 50k посторонних строк. Build/vet/lint/unit и PostgreSQL-тест прошли. |
 
 | 2026-10-20 | C3 | [x] | Таблица зависимостей: ADDR_OBJ/REESTR/ADM/PARAM → все виды, HOUSES → house/apartment/room/carplace, APARTMENTS → apartment/room; MUN без пересборки. До исправления routing-тест выявил все шесть расхождений. E2E: переименование улицы обновляет дом, REESTR обновляет level; build/vet/lint/unit и indexer integration прошли. |
+
+| 2026-10-20 | C6 | [x] | Resolve current hierarchy globally before region filtering; index active/actual records. After a successful regional kind rebuild: refresh + delete_by_query by region/kind/indexed_at. Moved/inactive regressions and E2E deletion pass; cleanup failures propagate. |
+
+| 2026-10-20 | Wave 2 | [x] | B3/B4/C2/C3/C6: build, make vet, golangci-lint, unit and full make test-integration passed with isolated PostgreSQL. Final release/Msg-Id changes additionally verified by importjob/worker integration and build/vet/lint/unit. Both GAR generators -verify are clean. |

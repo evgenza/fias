@@ -22,14 +22,16 @@ const BatchSize = 2000
 // административно-территориальном делении (как в примерах контракта).
 const hierarchyTable = "gar.adm_hierarchy"
 
-// hierarchySelect — снимок иерархии региона: по одной записи на объект
-// (действующая предпочтительнее исторических).
-const hierarchySelect = `SELECT DISTINCT ON (h.object_id) h.object_id, h.path, h.region_code
-FROM ` + hierarchyTable + ` h
-WHERE h.region_code IN (($1::int)::text, lpad(($1::int)::text,2,'0'), lpad(($1::int)::text,3,'0'), lpad(($1::int)::text,4,'0'))
- AND CASE WHEN h.region_code ~ '^[0-9]+$' THEN h.region_code::int END = $1::int
- AND h.object_id > $2
-ORDER BY h.object_id, h.is_active DESC, h.end_date DESC, h.id DESC`
+// hierarchySelect resolves the current hierarchy globally, then checks its region.
+// Regional historical IDs are only candidates for indexed point lookups.
+const hierarchySelect = `SELECT h.object_id, h.path, h.region_code
+FROM (SELECT DISTINCT object_id FROM ` + hierarchyTable + `
+ WHERE region_code IN (($1::int)::text, lpad(($1::int)::text,2,'0'), lpad(($1::int)::text,3,'0'), lpad(($1::int)::text,4,'0'))
+ AND object_id > $2) candidates
+JOIN LATERAL (SELECT object_id, path, region_code, is_active FROM ` + hierarchyTable + `
+ WHERE object_id=candidates.object_id
+ ORDER BY is_active DESC, end_date DESC, id DESC LIMIT 1) h ON true
+WHERE h.is_active AND CASE WHEN h.region_code ~ '^[0-9]+$' THEN h.region_code::int END = $1::int`
 
 // Regional IDs drive indexed point lookups; the limit bounds each database cursor.
 const (
@@ -40,6 +42,7 @@ JOIN LATERAL (SELECT object_id, object_guid, name, type_name, level, is_actual, 
  WHERE object_id = h.object_id
  ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
 LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+WHERE o.is_active AND o.is_actual
 ORDER BY o.object_id LIMIT $3`
 
 	housesQuery = `SELECT o.object_id, o.object_guid::text, o.house_num, o.house_type,
@@ -49,6 +52,7 @@ JOIN LATERAL (SELECT object_id, object_guid, house_num, house_type::text AS hous
  WHERE object_id = h.object_id
  ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
 LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+WHERE o.is_active AND o.is_actual
 ORDER BY o.object_id LIMIT $3`
 
 	apartmentsQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.apart_type, o.is_actual, o.is_active, h.path, h.region_code, r.level_id
@@ -57,6 +61,7 @@ JOIN LATERAL (SELECT object_id, object_guid, number, apart_type, is_actual, is_a
  WHERE object_id = h.object_id
  ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
 LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+WHERE o.is_active AND o.is_actual
 ORDER BY o.object_id LIMIT $3`
 
 	roomsQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.room_type, o.is_actual, o.is_active, h.path, h.region_code, r.level_id
@@ -65,6 +70,7 @@ JOIN LATERAL (SELECT object_id, object_guid, number, room_type, is_actual, is_ac
  WHERE object_id = h.object_id
  ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
 LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+WHERE o.is_active AND o.is_actual
 ORDER BY o.object_id LIMIT $3`
 
 	steadsQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.is_actual, o.is_active, h.path, h.region_code, r.level_id
@@ -73,6 +79,7 @@ JOIN LATERAL (SELECT object_id::bigint AS object_id, object_guid, number, is_act
  WHERE object_id = h.object_id
  ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
 LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+WHERE o.is_active AND o.is_actual
 ORDER BY o.object_id LIMIT $3`
 
 	carplacesQuery = `SELECT o.object_id, o.object_guid::text, o.number, o.is_actual, o.is_active, h.path, h.region_code, r.level_id
@@ -81,6 +88,7 @@ JOIN LATERAL (SELECT object_id, object_guid, number, is_actual, is_active FROM g
  WHERE object_id = h.object_id
  ORDER BY is_active DESC, is_actual DESC, end_date DESC, id DESC LIMIT 1) o ON true
 LEFT JOIN gar.reestr_objects r ON r.object_id = h.object_id
+WHERE o.is_active AND o.is_actual
 ORDER BY o.object_id LIMIT $3`
 )
 
