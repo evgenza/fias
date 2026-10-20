@@ -1,0 +1,246 @@
+{
+  "uid": "gar-infra",
+  "title": "GAR Platform — Инфраструктура",
+  "description": "PostgreSQL, Redis, NATS JetStream, Elasticsearch, MinIO",
+  "tags": ["gar", "infra"],
+  "timezone": "",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "schemaVersion": 39,
+  "version": 1,
+  "templating": {"list": []},
+  "annotations": {"list": []},
+  "panels": [
+    {"id": 100, "type": "row", "title": "PostgreSQL", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}, "collapsed": false, "panels": []},
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "PG connections по состояниям (gar)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 1},
+      "targets": [
+        {"refId": "A", "expr": "sum by (state) (pg_stat_activity_count{datname=\"gar\"})", "legendFormat": "{{state}}"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "stacking": {"mode": "normal"}, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "PG транзакции (commit/rollback)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 1},
+      "targets": [
+        {"refId": "A", "expr": "rate(pg_stat_database_xact_commit{datname=\"gar\"}[10m])", "legendFormat": "commit"},
+        {"refId": "B", "expr": "rate(pg_stat_database_xact_rollback{datname=\"gar\"}[10m])", "legendFormat": "rollback"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "PG строки (tup)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 1},
+      "targets": [
+        {"refId": "A", "expr": "rate(pg_stat_database_tup_inserted{datname=\"gar\"}[10m])", "legendFormat": "inserted"},
+        {"refId": "B", "expr": "rate(pg_stat_database_tup_updated{datname=\"gar\"}[10m])", "legendFormat": "updated"},
+        {"refId": "C", "expr": "rate(pg_stat_database_tup_deleted{datname=\"gar\"}[10m])", "legendFormat": "deleted"},
+        {"refId": "D", "expr": "rate(pg_stat_database_tup_fetched{datname=\"gar\"}[10m])", "legendFormat": "fetched"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "PG размер БД gar",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 9},
+      "targets": [{"refId": "A", "expr": "pg_database_size_bytes{datname=\"gar\"}", "instant": true}],
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "value"},
+      "fieldConfig": {"defaults": {"unit": "bytes", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}, "overrides": []}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "PG deadlocks",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 18, "x": 6, "y": 9},
+      "targets": [
+        {"refId": "A", "expr": "rate(pg_stat_database_deadlocks{datname=\"gar\"}[10m])", "legendFormat": "deadlocks/s"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "color": {"fixedColor": "red", "mode": "fixed"}, "custom": {"drawStyle": "line", "fillOpacity": 20, "showPoints": "never"}}, "overrides": []}
+    },
+    {"id": 101, "type": "row", "title": "Redis", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14}, "collapsed": false, "panels": []},
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Redis ops/s",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 15},
+      "targets": [
+        {"refId": "A", "expr": "rate(redis_commands_processed_total[10m])", "legendFormat": "commands/s"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Redis hit ratio",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 15},
+      "targets": [
+        {"refId": "A", "expr": "rate(redis_keyspace_hits_total[10m]) / (rate(redis_keyspace_hits_total[10m]) + rate(redis_keyspace_misses_total[10m]))", "legendFormat": "hit ratio"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Redis память / клиенты / ключи",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 15},
+      "targets": [
+        {"refId": "A", "expr": "redis_memory_used_bytes", "legendFormat": "used"},
+        {"refId": "B", "expr": "redis_memory_used_peak_bytes", "legendFormat": "peak"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {"id": 102, "type": "row", "title": "NATS JetStream", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 23}, "collapsed": false, "panels": []},
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "JetStream сообщения/байты в stream",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "targets": [
+        {"refId": "A", "expr": "jetstream_stream_total_messages", "legendFormat": "{{stream_name}} messages"},
+        {"refId": "B", "expr": "rate(gnatsd_varz_in_msgs[10m])", "legendFormat": "core in/s"},
+        {"refId": "C", "expr": "rate(gnatsd_varz_out_msgs[10m])", "legendFormat": "core out/s"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "JetStream consumer pending",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 12, "y": 24},
+      "targets": [
+        {"refId": "A", "expr": "jetstream_consumer_num_pending", "legendFormat": "{{stream_name}}/{{consumer_name}} pending"},
+        {"refId": "B", "expr": "jetstream_consumer_num_ack_pending", "legendFormat": "{{stream_name}}/{{consumer_name}} ack-pending"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "JetStream consumers",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 4, "x": 20, "y": 24},
+      "targets": [
+        {"refId": "A", "expr": "jetstream_server_total_consumers", "instant": true, "legendFormat": "consumers"},
+        {"refId": "B", "expr": "gnatsd_varz_connections", "instant": true, "legendFormat": "connections"}
+      ],
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "vertical", "textMode": "value_and_name"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}, "overrides": []}
+    },
+    {"id": 103, "type": "row", "title": "Elasticsearch", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 32}, "collapsed": false, "panels": []},
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "ES документы по индексам (gar*)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 33},
+      "targets": [
+        {"refId": "A", "expr": "elasticsearch_indices_docs_primary{index=~\"gar.*|\\\\.ds-gar.*\"}", "legendFormat": "{{index}}"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "ES поиск: rate и среднее время запроса",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 33},
+      "targets": [
+        {"refId": "A", "expr": "rate(elasticsearch_index_stats_search_query_total{index=~\"gar.*\"}[10m])", "legendFormat": "{{index}} query/s"},
+        {"refId": "B", "expr": "rate(elasticsearch_index_stats_search_query_time_seconds_total{index=~\"gar.*\"}[10m]) / rate(elasticsearch_index_stats_search_query_total{index=~\"gar.*\"}[10m])", "legendFormat": "{{index}} avg query time"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "ES JVM heap",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 41},
+      "targets": [
+        {"refId": "A", "expr": "elasticsearch_jvm_memory_used_bytes{area=\"heap\"}", "legendFormat": "used heap"},
+        {"refId": "B", "expr": "elasticsearch_jvm_memory_max_bytes{area=\"heap\"}", "legendFormat": "max heap"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "ES индексация (indexing rate, gar-addresses)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 41},
+      "targets": [
+        {"refId": "A", "expr": "rate(elasticsearch_index_stats_indexing_index_total{index=~\"gar.*\"}[10m])", "legendFormat": "{{index}} index ops/s"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {"id": 104, "type": "row", "title": "MinIO", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 49}, "collapsed": false, "panels": []},
+    {
+      "id": 40,
+      "type": "stat",
+      "title": "MinIO использовано",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 50},
+      "targets": [{"refId": "A", "expr": "minio_cluster_usage_total_bytes", "instant": true}],
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "value"},
+      "fieldConfig": {"defaults": {"unit": "bytes", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "purple", "value": null}]}}, "overrides": []}
+    },
+    {
+      "id": 41,
+      "type": "stat",
+      "title": "MinIO объектов / бакетов",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 50},
+      "targets": [
+        {"refId": "A", "expr": "minio_cluster_usage_object_total", "instant": true, "legendFormat": "objects"},
+        {"refId": "B", "expr": "minio_cluster_bucket_total", "instant": true, "legendFormat": "buckets"}
+      ],
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "vertical", "textMode": "value_and_name"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "purple", "value": null}]}}, "overrides": []}
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "MinIO S3 requests",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 50},
+      "targets": [
+        {"refId": "A", "expr": "sum by (api) (rate(minio_s3_requests_total[10m]))", "legendFormat": "{{api}}"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "reqps", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    }
+  ]
+}

@@ -58,6 +58,17 @@ services:
       retries: 30
       start_period: 90s
 
+  # One-shot: после старта Kibana создаёт data view gar-logs-* (см. deploy/kibana/init.sh).
+  kibana-init:
+    image: curlimages/curl:8.10.1
+    restart: "no"
+    volumes:
+      - ./deploy/kibana/init.sh:/init.sh:ro
+    command: ["sh", "/init.sh"]
+    depends_on:
+      kibana:
+        condition: service_healthy
+
   filebeat:
     image: docker.elastic.co/beats/filebeat:${ELK_VERSION:-8.15.5}
     restart: unless-stopped

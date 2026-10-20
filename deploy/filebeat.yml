@@ -14,6 +14,14 @@ processors:
       overwrite_keys: true
       process_array: false
       max_depth: 2
+  # slog JSON пишет "service":"gar-address-api" — строкой, а в ECS-шаблоне
+  # service — объект; переносим в service.name, иначе документ отбрасывается.
+  - rename:
+      fields:
+        - from: service
+          to: service.name
+      ignore_missing: true
+      fail_on_error: false
   - add_docker_metadata: ~
 
 output.elasticsearch:

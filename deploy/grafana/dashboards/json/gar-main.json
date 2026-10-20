@@ -1,0 +1,237 @@
+{
+  "uid": "gar-main",
+  "title": "GAR Platform — Основной",
+  "description": "Ключевые бизнес-метрики платформы ГАР и основные инфра-метрики",
+  "tags": ["gar", "platform"],
+  "timezone": "",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": {"from": "now-1h", "to": "now"},
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [
+    {"title": "Сервисы", "type": "dashboard", "tags": ["gar"], "asDropdown": true, "includeVars": true, "keepTime": true}
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Сервисы платформы",
+      "description": "up по job-ам Go-сервисов (importer, indexer, suggester, address-api)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 5, "x": 0, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=~\"importer|indexer|suggester|address-api\"}",
+          "legendFormat": "{{job}}",
+          "instant": true
+        }
+      ],
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "vertical", "textMode": "value_and_name"},
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"1": {"text": "UP", "color": "green"}, "0": {"text": "DOWN", "color": "red"}}}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Документов в gar-addresses",
+      "description": "elasticsearch_indices_docs_primary по индексу gar-addresses",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 4, "x": 5, "y": 0},
+      "targets": [
+        {"refId": "A", "expr": "sum(elasticsearch_indices_docs_primary{index=~\"gar-addresses.*\"})", "instant": true}
+      ],
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "value"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}, "overrides": []}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Suggest cache hit ratio",
+      "description": "hit / (hit + miss) по накопленным счётчикам address_cache_total",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 4, "x": 9, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(address_cache_total{result=\"hit\"}) / sum(address_cache_total)",
+          "instant": true
+        }
+      ],
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "value"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.5}, {"color": "green", "value": 0.8}]}}, "overrides": []}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "PG connections (gar)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 3, "x": 13, "y": 0},
+      "targets": [
+        {"refId": "A", "expr": "sum(pg_stat_activity_count{datname=\"gar\"})", "instant": true}
+      ],
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "value"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}, "overrides": []}
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "JetStream сообщений (GAR)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 4, "x": 16, "y": 0},
+      "targets": [
+        {"refId": "A", "expr": "sum(jetstream_stream_total_messages{stream_name=\"GAR\"})", "instant": true}
+      ],
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "value"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}, "overrides": []}
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "MinIO использовано",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 4, "x": 20, "y": 0},
+      "targets": [
+        {"refId": "A", "expr": "minio_cluster_usage_total_bytes", "instant": true}
+      ],
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "value"},
+      "fieldConfig": {"defaults": {"unit": "bytes", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "purple", "value": null}]}}, "overrides": []}
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "PostgreSQL",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 4, "w": 5, "x": 0, "y": 5},
+      "targets": [{"refId": "A", "expr": "pg_up", "instant": true, "legendFormat": "postgres"}],
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "textMode": "value_and_name"},
+      "fieldConfig": {
+        "defaults": {"mappings": [{"type": "value", "options": {"1": {"text": "UP", "color": "green"}, "0": {"text": "DOWN", "color": "red"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Redis",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 4, "w": 5, "x": 5, "y": 5},
+      "targets": [{"refId": "A", "expr": "redis_up", "instant": true, "legendFormat": "redis"}],
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "textMode": "value_and_name"},
+      "fieldConfig": {
+        "defaults": {"mappings": [{"type": "value", "options": {"1": {"text": "UP", "color": "green"}, "0": {"text": "DOWN", "color": "red"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Elasticsearch",
+      "description": "clusterinfo up + цвет кластера",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 4, "w": 5, "x": 10, "y": 5},
+      "targets": [
+        {"refId": "A", "expr": "elasticsearch_clusterinfo_up", "instant": true, "legendFormat": "up"},
+        {"refId": "B", "expr": "max(elasticsearch_cluster_health_status{color=\"green\"})", "instant": true, "legendFormat": "green"}
+      ],
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "textMode": "value_and_name"},
+      "fieldConfig": {
+        "defaults": {"mappings": [{"type": "value", "options": {"1": {"text": "OK", "color": "green"}, "0": {"text": "FAIL", "color": "red"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "NATS",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 4, "w": 5, "x": 15, "y": 5},
+      "targets": [{"refId": "A", "expr": "up{job=\"nats-exporter\"}", "instant": true, "legendFormat": "nats"}],
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "textMode": "value_and_name"},
+      "fieldConfig": {
+        "defaults": {"mappings": [{"type": "value", "options": {"1": {"text": "UP", "color": "green"}, "0": {"text": "DOWN", "color": "red"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "MinIO",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 5},
+      "targets": [{"refId": "A", "expr": "minio_cluster_health_status", "instant": true, "legendFormat": "minio"}],
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "textMode": "value_and_name"},
+      "fieldConfig": {
+        "defaults": {"mappings": [{"type": "value", "options": {"1": {"text": "OK", "color": "green"}, "0": {"text": "FAIL", "color": "red"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Импорт записей ГАР",
+      "description": "rate(gar_import_records_total) по kind; rate(gar_worker_tasks_total) по result",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 9},
+      "targets": [
+        {"refId": "A", "expr": "sum by (kind) (rate(gar_import_records_total[10m]))", "legendFormat": "import {{kind}}"},
+        {"refId": "B", "expr": "sum by (result) (rate(gar_worker_tasks_total[10m]))", "legendFormat": "worker {{result}}"}
+      ],
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["sum"]}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "stacking": {"mode": "normal"}, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Подсказки адресов",
+      "description": "rate(address_api_suggest_total) по result и rate(grpc_requests_total) suggester по method",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 9},
+      "targets": [
+        {"refId": "A", "expr": "sum by (result) (rate(address_api_suggest_total[10m]))", "legendFormat": "api {{result}}"},
+        {"refId": "B", "expr": "sum by (method) (rate(grpc_requests_total{method=~\"/suggest.*\"}[10m]))", "legendFormat": "grpc {{method}}"}
+      ],
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["sum"]}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "reqps", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "API latency p95 (address-api)",
+      "description": "histogram_quantile(0.95/0.99) platform_http_request_duration_seconds по /api/*",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 17},
+      "targets": [
+        {"refId": "A", "expr": "histogram_quantile(0.95, sum by (le, path) (rate(platform_http_request_duration_seconds_bucket{service=\"address-api\", path=~\"/api/.*\"}[10m])))", "legendFormat": "p95 {{path}}"},
+        {"refId": "B", "expr": "histogram_quantile(0.99, sum by (le) (rate(platform_http_request_duration_seconds_bucket{service=\"address-api\", path=~\"/api/.*\"}[10m])))", "legendFormat": "p99 все /api/*"}
+      ],
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Индексация в Elasticsearch",
+      "description": "rate(indexer_documents_indexed_total) по kind и rate(indexer_events_total) по result",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 17},
+      "targets": [
+        {"refId": "A", "expr": "sum by (kind) (rate(indexer_documents_indexed_total[10m]))", "legendFormat": "docs {{kind}}"},
+        {"refId": "B", "expr": "sum by (result) (rate(indexer_events_total[10m]))", "legendFormat": "events {{result}}"}
+      ],
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["sum"]}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    }
+  ],
+  "templating": {"list": []},
+  "annotations": {"list": []}
+}
