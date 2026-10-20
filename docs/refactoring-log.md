@@ -341,3 +341,6 @@ Address API operational routes moved from public :8080 to internal :9214 (ADDRES
 
 ## 2026-10-20 — D8
 Suggester client uses DNS round_robin, 30s/10s keepalive and up to three attempts for Unavailable within request deadline. Server limits streams to 128 per connection and enforces keepalive. Health polls ES every 5s (2s deadline) and becomes NOT_SERVING at shutdown. Reflection defaults off; enable with GRPC_REFLECTION=true.
+
+## 2026-10-20 — D9
+Web client discards stale card/children/suggestion responses and stale card errors. Starting navigation clears old children and invalidates pending search/debounce.

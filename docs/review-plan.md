@@ -488,7 +488,7 @@ suggester, инфраструктура и CI. Находки сверены с 
   - reflection за флагом;
   - лимиты на сервере.
 
-### [ ] D9. Гонки ответов в веб-клиенте — Medium
+### [x] D9. Гонки ответов в веб-клиенте — Medium
 - **Файлы:** `services/address-api/static/web/app.js` (~126–141, 173–209).
 - **Исправление:**
   - общий `detailsSeq` для `showDetails`/`loadChildren`;
@@ -672,3 +672,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | D7 | [x] | Admin listener :9214 (configurable), no host mapping; public mux excludes operations. Prometheus, Dockerfile/compose healthcheck, smoke and README updated. Public-isolation regression and E2E HTTP/2/admin checks pass; compose config valid. |
 
 | 2026-10-20 | D8 | [x] | DNS round_robin, keepalive 30s/10s, bounded retry Unavailable; server 128 streams, keepalive enforcement, ES-derived health with shutdown NOT_SERVING, opt-in GRPC_REFLECTION. Health regression/unit and address API E2E pass. |
+
+| 2026-10-20 | D9 | [x] | Shared detailsSeq protects cards/children/errors; every input and card selection invalidates suggestions and pending debounce. Three deferred-response regressions fail before fix and pass after (node --test tests/web/app.test.cjs). |

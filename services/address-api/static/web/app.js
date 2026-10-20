@@ -26,6 +26,7 @@
   var childrenList = document.getElementById("children-list");
 
   var debounceTimer = null;
+  var detailsSeq = 0;
   var requestSeq = 0; // защита от гонки: показываем только последний ответ
 
   function kindLabel(kind) {
@@ -124,17 +125,24 @@
   }
 
   function showDetails(objectID) {
+    var seq = ++detailsSeq;
+    ++requestSeq;
+    clearTimeout(debounceTimer);
+    childrenTitle.hidden = true;
+    childrenList.innerHTML = "";
     setStatus("Загрузка карточки…");
     fetchJSON("/api/v1/addresses/" + encodeURIComponent(objectID))
       .then(function (resp) {
         var fromCache = resp.headers.get("X-Cache") === "hit";
         return resp.json().then(function (data) {
+          if (seq !== detailsSeq) { return; }
           renderDetails(data, fromCache);
-          loadChildren(objectID);
+          loadChildren(objectID, seq);
           setStatus("");
         });
       })
       .catch(function (err) {
+        if (seq !== detailsSeq) { return; }
         details.hidden = true;
         setStatus("Ошибка карточки: " + err.message, true);
       });
@@ -170,10 +178,11 @@
     childrenList.innerHTML = "";
   }
 
-  function loadChildren(objectID) {
+  function loadChildren(objectID, seq) {
     fetchJSON("/api/v1/addresses/" + encodeURIComponent(objectID) + "/children?limit=50")
       .then(function (resp) { return resp.json(); })
       .then(function (data) {
+        if (seq !== detailsSeq) { return; }
         var items = data.items || [];
         if (!items.length) { return; }
         childrenTitle.hidden = false;
@@ -201,6 +210,7 @@
   }
 
   input.addEventListener("input", function () {
+    ++requestSeq;
     var query = input.value.trim();
     clearTimeout(debounceTimer);
     if (query.length < 2) {
