@@ -266,6 +266,64 @@ services:
       retries: 5
       start_period: 15s
 
+  # Потребитель gar.objects.changed: сборка адресных документов из PostgreSQL
+  # и пакетная запись в Elasticsearch (индекс gar-addresses).
+  indexer:
+    build:
+      context: .
+      dockerfile: services/indexer/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-gar}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-gar}?sslmode=disable
+      NATS_URL: nats://nats:4222
+      ES_ADDRESSES: http://elasticsearch:9200
+      ES_INDEX: gar-addresses
+      INDEXER_HTTP_ADDR: :9212
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "127.0.0.1:9212:9212"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      elasticsearch:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9212/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  # gRPC-сервис подсказок адресов поверх индекса gar-addresses (read-only):
+  # unary GetAddress/Suggest и server-streaming StreamSuggestions.
+  suggester:
+    build:
+      context: .
+      dockerfile: services/suggester/Dockerfile
+    restart: unless-stopped
+    environment:
+      ES_ADDRESSES: http://elasticsearch:9200
+      ES_INDEX: gar-addresses
+      GRPC_ADDR: :50051
+      SUGGESTER_HTTP_ADDR: :9213
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "127.0.0.1:50051:50051"
+      - "127.0.0.1:9213:9213"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9213/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
 volumes:
   postgres_data:
   es_data:
