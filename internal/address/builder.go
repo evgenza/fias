@@ -524,23 +524,30 @@ func (b *Builder) dictionaries(ctx context.Context) (*dictionaries, error) {
 	if b.dicts != nil && time.Since(b.dictsLoadedAt) < DictionaryTTL {
 		return b.dicts, nil
 	}
-	dicts := &dictionaries{}
-	var err error
-	if dicts.houseTypes, err = b.loadTypeDict(ctx, "gar.house_types"); err != nil {
-		return nil, err
-	}
-	if dicts.addHouseTypes, err = b.loadTypeDict(ctx, "gar.add_house_types"); err != nil {
-		return nil, err
-	}
-	if dicts.apartTypes, err = b.loadTypeDict(ctx, "gar.apartment_types"); err != nil {
-		return nil, err
-	}
-	if dicts.roomTypes, err = b.loadTypeDict(ctx, "gar.room_types"); err != nil {
-		return nil, err
-	}
-	if dicts.levelTypes, err = b.loadTypeDict(ctx, `(SELECT DISTINCT ON (level) level AS id,shortname FROM gar.addr_obj_types
+	dicts := &dictionaries{houseTypes: map[int64]string{}, addHouseTypes: map[int64]string{}, apartTypes: map[int64]string{}, roomTypes: map[int64]string{}, levelTypes: map[int64]string{}}
+	rows, err := b.store.SQL().QueryContext(ctx, `SELECT 0,id,shortname FROM gar.house_types
+ UNION ALL SELECT 1,id,shortname FROM gar.add_house_types
+ UNION ALL SELECT 2,id,shortname FROM gar.apartment_types
+ UNION ALL SELECT 3,id,shortname FROM gar.room_types
+ UNION ALL SELECT 4,id,shortname FROM (SELECT DISTINCT ON (level) level AS id,shortname FROM gar.addr_obj_types
  WHERE is_active AND start_date<=CURRENT_DATE AND end_date>CURRENT_DATE
- ORDER BY level,start_date DESC,update_date DESC,id DESC) level_types`); err != nil {
+ ORDER BY level,start_date DESC,update_date DESC,id DESC) levels`)
+	if err != nil {
+		return nil, err
+	}
+	maps := []map[int64]string{dicts.houseTypes, dicts.addHouseTypes, dicts.apartTypes, dicts.roomTypes, dicts.levelTypes}
+	if err := each(rows, func() error {
+		var kind int
+		var id int64
+		var short sql.NullString
+		if err := rows.Scan(&kind, &id, &short); err != nil {
+			return err
+		}
+		if v := NormalizeShortType(short.String); v != "" {
+			maps[kind][id] = v
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 	// Empty startup results must be retried on the next request.
@@ -551,32 +558,6 @@ func (b *Builder) dictionaries(ctx context.Context) (*dictionaries, error) {
 		b.dicts = nil
 	}
 	return dicts, nil
-}
-
-// loadTypeDict читает справочник типов: id → нормализованное сокращение.
-func (b *Builder) loadTypeDict(ctx context.Context, table string) (map[int64]string, error) {
-	rows, err := b.store.SQL().QueryContext(ctx,
-		`SELECT id, shortname FROM `+table) // таблицы — константы кода, не ввод пользователя
-	if err != nil {
-		return nil, fmt.Errorf("address: справочник %s: %w", table, err)
-	}
-	dict := map[int64]string{}
-	if err := each(rows, func() error {
-		var (
-			id    int64
-			short sql.NullString
-		)
-		if err := rows.Scan(&id, &short); err != nil {
-			return err
-		}
-		if normalized := NormalizeShortType(short.String); normalized != "" {
-			dict[id] = normalized
-		}
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("address: справочник %s: %w", table, err)
-	}
-	return dict, nil
 }
 
 // parseTypeID разбирает идентификатор типа (numeric как текст); мусор → 0.

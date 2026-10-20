@@ -171,7 +171,7 @@
   }
 
   function loadChildren(objectID) {
-    fetchJSON("/api/v1/addresses/" + encodeURIComponent(objectID) + "/children?limit=200")
+    fetchJSON("/api/v1/addresses/" + encodeURIComponent(objectID) + "/children?limit=50")
       .then(function (resp) { return resp.json(); })
       .then(function (data) {
         var items = data.items || [];

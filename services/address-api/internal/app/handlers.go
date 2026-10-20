@@ -183,9 +183,13 @@ func (h *handler) handleChildren(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// Родитель обязан существовать: иначе 404, а не пустой список.
-	if _, err := h.builder.DescribeObject(r.Context(), objectID); err != nil {
+	exists, err := address.ObjectExists(r.Context(), h.store, objectID)
+	if err != nil {
 		h.writeDescribeError(w, r, objectID, err)
+		return
+	}
+	if !exists {
+		h.writeDescribeError(w, r, objectID, address.ErrNotFound)
 		return
 	}
 	ids, err := address.ListChildren(r.Context(), h.store, objectID, limit)
@@ -195,19 +199,13 @@ func (h *handler) handleChildren(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]addressDetails, 0, len(ids))
-	for _, id := range ids {
-		details, err := h.describeWithChildren(r.Context(), id, false)
-		if errors.Is(err, address.ErrNotFound) {
-			// Запись иерархии есть, собственной записи (ещё) нет: пропускаем.
-			h.log.WarnContext(r.Context(), "children: объект без собственной записи", "object_id", id)
-			continue
-		}
-		if err != nil {
-			h.log.ErrorContext(r.Context(), "children: описание", "object_id", id, "error", err)
-			writeError(w, http.StatusInternalServerError, codeInternal, "внутренняя ошибка")
-			return
-		}
-		items = append(items, *details)
+	descriptions, err := h.builder.DescribeObjects(r.Context(), ids)
+	if err != nil {
+		h.writeDescribeError(w, r, objectID, err)
+		return
+	}
+	for _, desc := range descriptions {
+		items = append(items, *detailsFromDescription(desc))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
@@ -219,19 +217,7 @@ func (h *handler) describeWithChildren(ctx context.Context, objectID int64, with
 	if err != nil {
 		return nil, err
 	}
-	details := &addressDetails{
-		ObjectID:       desc.ObjectID,
-		ObjectGUID:     desc.ObjectGUID,
-		Kind:           desc.Kind,
-		Name:           desc.Name,
-		TypeName:       desc.TypeName,
-		Level:          desc.Level,
-		Region:         desc.Region,
-		FullAddress:    desc.FullAddress,
-		IsActual:       desc.IsActual,
-		IsActive:       desc.IsActive,
-		ParentObjectID: desc.ParentObjectID,
-	}
+	details := detailsFromDescription(desc)
 	if withCount {
 		count, err := address.CountChildren(ctx, h.store, objectID)
 		if err != nil {
@@ -317,4 +303,20 @@ func writeError(w http.ResponseWriter, statusCode int, code, message string) {
 	writeJSON(w, statusCode, map[string]any{
 		"error": map[string]string{"code": code, "message": message},
 	})
+}
+
+func detailsFromDescription(desc *address.Description) *addressDetails {
+	return &addressDetails{
+		ObjectID:       desc.ObjectID,
+		ObjectGUID:     desc.ObjectGUID,
+		Kind:           desc.Kind,
+		Name:           desc.Name,
+		TypeName:       desc.TypeName,
+		Level:          desc.Level,
+		Region:         desc.Region,
+		FullAddress:    desc.FullAddress,
+		IsActual:       desc.IsActual,
+		IsActive:       desc.IsActive,
+		ParentObjectID: desc.ParentObjectID,
+	}
 }

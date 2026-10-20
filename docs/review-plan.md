@@ -417,7 +417,7 @@ suggester, инфраструктура и CI. Находки сверены с 
   - на публичной границе не доверять входящему sampled-флагу и фильтровать
     baggage.
 
-### [ ] D4. N+1 в `/children` — High
+### [x] D4. N+1 в `/children` — High
 - **Зависимости:** C1 (те же файлы `describe.go`/`builder.go`).
 - **Файлы:** `services/address-api/internal/app/handlers.go` (~187–211),
   `internal/address/describe.go` (~109–152, 195–259),
@@ -662,3 +662,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | C7 | [x] | Волна 3: дом без HOUSENUM, Name/TypeName по первому номеру; действующий PARAM 16 уровней 1/3/4, регион из корня PATH при отсутствии REGIONCODE, MUN fallback и маршрутизация; типы уровней 9/17 из ADDR_OBJ_TYPES. Регрессии сначала воспроизведены; golden примера комнаты из руководства, build/vet/lint/unit и полный integration с отдельной PostgreSQL прошли. |
 
 | 2026-10-20 | D2 | [x] | HTTP limits, API deadline 10s, readiness drain 2s, forced shutdown cancels and waits for handlers; tracing shutdown bounded to 5s. Platform/API tests pass. |
+
+| 2026-10-20 | D4 | [x] | Batch descriptions with shared ancestors, registry level routing, EXISTS for hierarchy-only parents, web limit 50; PostgreSQL pg_stat_statements regression: 200 children = 8 SQL on cold cache. |
