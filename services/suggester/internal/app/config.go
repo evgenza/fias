@@ -3,7 +3,9 @@
 package app
 
 import (
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -23,7 +25,8 @@ type Config struct {
 	// GRPCAddr — адрес gRPC-сервера.
 	GRPCAddr string
 	// HTTPAddr — адрес HTTP-сервера (/metrics, /healthz, /readyz).
-	HTTPAddr string
+	HTTPAddr         string
+	EnableReflection bool
 }
 
 // ConfigFromEnv читает настройки из окружения: ES_ADDRESSES (через запятую),
@@ -34,6 +37,13 @@ func ConfigFromEnv() (Config, error) {
 		ESIndex:  os.Getenv("ES_INDEX"),
 		GRPCAddr: envOr("GRPC_ADDR", defaultGRPCAddr),
 		HTTPAddr: envOr("SUGGESTER_HTTP_ADDR", defaultHTTPAddr),
+	}
+	if value := os.Getenv("GRPC_REFLECTION"); value != "" {
+		enabled, err := strconv.ParseBool(value)
+		if err != nil {
+			return cfg, fmt.Errorf("GRPC_REFLECTION: %w", err)
+		}
+		cfg.EnableReflection = enabled
 	}
 	addresses := strings.Split(envOr("ES_ADDRESSES", defaultESAddress), ",")
 	for _, address := range addresses {

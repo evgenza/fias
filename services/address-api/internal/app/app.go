@@ -15,8 +15,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	_ "google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 
 	"gar-importer/internal/address"
 	"gar-importer/internal/config"
@@ -80,7 +82,13 @@ func Run(ctx context.Context, cfg Config) error {
 
 	// gRPC-клиент suggester: ленивое соединение, Connect запускает его сразу,
 	// чтобы начать подключение до первого запроса.
-	grpcConn, err := grpc.NewClient(cfg.SuggesterGRPCAddr,
+	target := cfg.SuggesterGRPCAddr
+	if !strings.Contains(target, "://") {
+		target = "dns:///" + target
+	}
+	grpcConn, err := grpc.NewClient(target,
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: 30 * time.Second, Timeout: 10 * time.Second, PermitWithoutStream: true}),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig":[{"round_robin":{}}],"methodConfig":[{"name":[{"service":"suggest.v1.Suggester"}],"retryPolicy":{"MaxAttempts":3,"InitialBackoff":"0.1s","MaxBackoff":"1s","BackoffMultiplier":2,"RetryableStatusCodes":["UNAVAILABLE"]}}]}`),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)

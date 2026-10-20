@@ -338,3 +338,6 @@ Redis uses 200ms I/O/connect deadlines without retries. Card TTL is bounded by 1
 
 ## 2026-10-20 — D7
 Address API operational routes moved from public :8080 to internal :9214 (ADDRESS_API_ADMIN_HTTP_ADDR). Compose exposes only the public port. Prometheus and container probes use the internal listener.
+
+## 2026-10-20 — D8
+Suggester client uses DNS round_robin, 30s/10s keepalive and up to three attempts for Unavailable within request deadline. Server limits streams to 128 per connection and enforces keepalive. Health polls ES every 5s (2s deadline) and becomes NOT_SERVING at shutdown. Reflection defaults off; enable with GRPC_REFLECTION=true.

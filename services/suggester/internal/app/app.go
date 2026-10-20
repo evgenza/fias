@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 
 	"gar-importer/internal/platform"
@@ -32,6 +33,8 @@ const (
 // Run запускает suggester и работает до отмены контекста: gRPC-сервер
 // подсказок (GRPCAddr) и HTTP-сервер проверок и метрик (HTTPAddr).
 func Run(ctx context.Context, cfg Config) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	log := slog.Default()
 	shutdown, err := platform.InitTracing(ctx, serviceName)
 	if err != nil {
@@ -52,16 +55,39 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	grpcServer := grpc.NewServer(
+		grpc.MaxConcurrentStreams(128),
+		grpc.KeepaliveParams(keepalive.ServerParameters{Time: 30 * time.Second, Timeout: 10 * time.Second, MaxConnectionIdle: 120 * time.Second}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 30 * time.Second, PermitWithoutStream: true}),
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.ChainUnaryInterceptor(grpcMetrics.UnaryServerInterceptor()),
 		grpc.ChainStreamInterceptor(grpcMetrics.StreamServerInterceptor()),
 	)
 	suggestv1.RegisterSuggesterServer(grpcServer, server.New(searchClient, log))
-	reflection.Register(grpcServer)
+	defer grpcServer.Stop()
+	if cfg.EnableReflection {
+		reflection.Register(grpcServer)
+	}
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(grpcServer, healthServer)
-	healthServer.SetServingStatus(healthServiceName, healthpb.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus(healthServiceName, healthpb.HealthCheckResponse_NOT_SERVING)
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
+	defer healthServer.Shutdown()
+	healthDone := make(chan struct{})
+	go func() {
+		defer close(healthDone)
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			updateHealth(ctx, healthServer, searchClient.Ping)
+			select {
+			case <-ctx.Done():
+				healthServer.Shutdown()
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	defer func() { cancel(); <-healthDone }()
 
 	listener, err := net.Listen("tcp", cfg.GRPCAddr)
 	if err != nil {
@@ -91,6 +117,7 @@ func Run(ctx context.Context, cfg Config) error {
 	case <-ctx.Done():
 	}
 
+	healthServer.Shutdown()
 	// Graceful stop: сначала завершаем gRPC, затем дожидаемся HTTP.
 	stopped := make(chan struct{})
 	go func() {
@@ -105,4 +132,15 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	log.Info("gRPC-сервер остановлен")
 	return <-httpErr
+}
+
+func updateHealth(ctx context.Context, h *health.Server, ping func(context.Context) error) {
+	checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	state := healthpb.HealthCheckResponse_SERVING
+	if err := ping(checkCtx); err != nil {
+		state = healthpb.HealthCheckResponse_NOT_SERVING
+	}
+	h.SetServingStatus(healthServiceName, state)
+	h.SetServingStatus("", state)
 }

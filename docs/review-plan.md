@@ -472,7 +472,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Исправление:** `/metrics` (и readyz/healthz) — на отдельный внутренний порт,
   как у suggester (`:9213`); обновить prometheus.yml и healthcheck в compose.
 
-### [ ] D8. gRPC: клиент и сервер — Medium
+### [x] D8. gRPC: клиент и сервер — Medium
 - **Файлы:** `services/address-api/internal/app/app.go` (~75–83),
   `services/suggester/internal/app/app.go` (~52–62).
 - **Проблема:**
@@ -670,3 +670,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | D6 | [x] | Redis 200ms/no retries, TTL ≤15m, keys include latest ready import id/finished_at (handles resumed runs), detached bounded SET, negative TTL 30s, per-object/version singleflight. E2E verifies Redis hit, negative TTL and invalidation after import. |
 
 | 2026-10-20 | D7 | [x] | Admin listener :9214 (configurable), no host mapping; public mux excludes operations. Prometheus, Dockerfile/compose healthcheck, smoke and README updated. Public-isolation regression and E2E HTTP/2/admin checks pass; compose config valid. |
+
+| 2026-10-20 | D8 | [x] | DNS round_robin, keepalive 30s/10s, bounded retry Unavailable; server 128 streams, keepalive enforcement, ES-derived health with shutdown NOT_SERVING, opt-in GRPC_REFLECTION. Health regression/unit and address API E2E pass. |
