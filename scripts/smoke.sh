@@ -60,8 +60,12 @@ check "HTTP/2 prior knowledge"      curl -sf --http2-prior-knowledge http://127.
 check "suggest 400 на пустой q"     test "$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:8080/api/v1/suggest')" = "400"
 
 echo "==> prometheus targets (приложения)"
+target_up() { # target_up <job>
+  curl -sf 'http://127.0.0.1:9090/api/v1/targets?state=active' \
+    | jq -e --arg j "$1" '.data.activeTargets[] | select(.labels.job==$j and .health=="up")' >/dev/null
+}
 for job in importer indexer suggester address-api; do
-  check_wait "$SCRAPE_WAIT" "target $job UP" bash -c "curl -sf 'http://127.0.0.1:9090/api/v1/targets?state=active' | grep -q '\"job\":\"$job\".*\"health\":\"up\"'"
+  check_wait "$SCRAPE_WAIT" "target $job UP" target_up "$job"
 done
 
 if [ "$WITH_SEED" = "--with-seed" ]; then

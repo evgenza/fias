@@ -515,7 +515,7 @@ suggester, инфраструктура и CI. Находки сверены с 
 - **Исправление:** взять URL в одинарные кавычки внутри shell-строки.
 - **Готово, когда:** при остановленном ES контейнер переходит в `unhealthy`.
 
-### [ ] E2. Ложный PASS в smoke-проверке Prometheus — Medium
+### [x] E2. Ложный PASS в smoke-проверке Prometheus — Medium
 - **Файлы:** `scripts/smoke.sh` (~64).
 - **Исправление:** проверять через
   `jq -e '.data.activeTargets[] | select(.labels.job==$j and .health=="up")'`.
@@ -629,3 +629,4 @@ suggester, инфраструктура и CI. Находки сверены с 
 | Дата | Задача | Статус | Коммит / примечание |
 |---|---|---|---|
 | 2026-10-20 | E1 | [x] | Исправлен healthcheck Elasticsearch; изолированный контейнер без ES переходит в unhealthy, compose config валиден. |
+| 2026-10-20 | E2 | [x] | Smoke проверяет job и health одного target через jq; absent/down отвергаются, UP принимается, bash -n пройден. |

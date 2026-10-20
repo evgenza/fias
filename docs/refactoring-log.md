@@ -233,3 +233,7 @@ dataset параллельно; sample не публикуется.
 ## Волна 0 / E1 (2026-10-20)
 
 Исправлен healthcheck Elasticsearch; изолированный контейнер без ES переходит в unhealthy, compose config валиден.
+
+## Волна 0 / E2 (2026-10-20)
+
+Smoke проверяет job и health одного target через jq; absent/down отвергаются, UP принимается, bash -n пройден.
