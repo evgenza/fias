@@ -466,7 +466,7 @@ suggester, инфраструктура и CI. Находки сверены с 
   - `set` через `context.WithoutCancel` с коротким таймаутом;
   - негативный TTL 30 с и `singleflight` по objectID.
 
-### [ ] D7. Служебные эндпоинты на публичном порту — Medium
+### [x] D7. Служебные эндпоинты на публичном порту — Medium
 - **Файлы:** `services/address-api/internal/app/app.go` (~115), `deploy/prometheus.yml` (~45),
   `compose.yaml`.
 - **Исправление:** `/metrics` (и readyz/healthz) — на отдельный внутренний порт,
@@ -668,3 +668,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | D5 | [x] | Shared q/region validation on HTTP/gRPC, ES 4xx mapped without response body leakage (429 remains retryable), cancellation/deadline → 499/504 and Info; gRPC metrics normalize context errors. Validation/error tests pass. |
 
 | 2026-10-20 | D6 | [x] | Redis 200ms/no retries, TTL ≤15m, keys include latest ready import id/finished_at (handles resumed runs), detached bounded SET, negative TTL 30s, per-object/version singleflight. E2E verifies Redis hit, negative TTL and invalidation after import. |
+
+| 2026-10-20 | D7 | [x] | Admin listener :9214 (configurable), no host mapping; public mux excludes operations. Prometheus, Dockerfile/compose healthcheck, smoke and README updated. Public-isolation regression and E2E HTTP/2/admin checks pass; compose config valid. |

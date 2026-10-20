@@ -98,7 +98,7 @@ indexer. Новая установка создаёт write alias автомат
 | `importer` | `cmd/gar-importer` + `internal/worker` | импорт ZIP из MinIO → PostgreSQL, события в NATS | 9211 (metrics/health) |
 | `indexer` | `services/indexer` | события NATS → сборка адресов из gar.* → bulk в Elasticsearch | 9212 |
 | `suggester` | `services/suggester` + `proto/suggest/v1` | gRPC: `GetAddress`, `Suggest`, `StreamSuggestions` (стриминг) | 50051, 9213 |
-| `address-api` | `services/address-api` | REST API + HTTP/2 + Swagger UI + веб-клиент, кэш Redis | 8080 |
+| `address-api` | `services/address-api` | REST API + HTTP/2 + Swagger UI + веб-клиент, кэш Redis | 8080 (public), 9214 (internal metrics/health) |
 
 Инфраструктура: PostgreSQL 18, Elasticsearch 8.15, Kibana, Filebeat,
 NATS JetStream, MinIO, Redis 7, Prometheus, Grafana, Jaeger + экспортёры
@@ -264,3 +264,5 @@ go run ./cmd/gar-importer import --zip "$HOME/Downloads/gar_xml.zip" --regions 7
 Документация форматов ГАР — соседняя папка `../../` (XSD: `../../unpacked/xsd`,
 описания полей: `../../02 Форматы`, правила адресной строки:
 `../../01 Руководства/Формирование адресной строки.md`).
+
+Address-api operational endpoints `/metrics`, `/healthz`, `/readyz` use `ADDRESS_API_ADMIN_HTTP_ADDR` (default `:9214`), accessible inside the compose network without a host port mapping.

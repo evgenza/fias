@@ -30,7 +30,8 @@ type Config struct {
 	// CacheTTL — время жизни карточки объекта в кэше.
 	CacheTTL time.Duration
 	// HTTPAddr — адрес HTTP-сервера (h2c: HTTP/1.1 и HTTP/2 prior-knowledge).
-	HTTPAddr string
+	HTTPAddr      string
+	AdminHTTPAddr string
 }
 
 // ConfigFromEnv читает настройки из окружения: DATABASE_URL (обязательна),
@@ -44,6 +45,7 @@ func ConfigFromEnv() (Config, error) {
 		RedisAddr:         envOr("REDIS_ADDR", defaultRedisAddr),
 		RedisPassword:     os.Getenv("REDIS_PASSWORD"),
 		HTTPAddr:          envOr("HTTP_ADDR", defaultHTTPAddr),
+		AdminHTTPAddr:     envOr("ADDRESS_API_ADMIN_HTTP_ADDR", ":9214"),
 		CacheTTL:          defaultCacheTTL,
 	}
 	if value := os.Getenv("CACHE_TTL"); value != "" {

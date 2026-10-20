@@ -42,4 +42,4 @@ scrape_configs:
 
   - job_name: address-api
     static_configs:
-      - targets: ["address-api:8080"]
+      - targets: ["address-api:9214"]

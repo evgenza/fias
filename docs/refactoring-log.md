@@ -335,3 +335,6 @@ Suggest accepts up to 200 runes/20 words, region up to three ASCII digits. Cance
 
 ## 2026-10-20 — D6
 Redis uses 200ms I/O/connect deadlines without retries. Card TTL is bounded by 15m; missing cards use 30s. Cache v2 namespaces include the latest ready import id and finish time. If version lookup fails caching is bypassed. Concurrent loads share singleflight; shared work and SET survive individual request cancellation with bounded contexts.
+
+## 2026-10-20 — D7
+Address API operational routes moved from public :8080 to internal :9214 (ADDRESS_API_ADMIN_HTTP_ADDR). Compose exposes only the public port. Prometheus and container probes use the internal listener.

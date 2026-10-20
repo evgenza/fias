@@ -332,6 +332,7 @@ services:
       REDIS_PASSWORD: ""
       CACHE_TTL: 5m
       HTTP_ADDR: :8080
+      ADDRESS_API_ADMIN_HTTP_ADDR: :9214
       LOG_LEVEL: ${LOG_LEVEL:-info}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     ports:
@@ -346,7 +347,7 @@ services:
       suggester:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9214/healthz >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5

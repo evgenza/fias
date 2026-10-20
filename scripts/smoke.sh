@@ -42,8 +42,8 @@ echo "==> состояние контейнеров"
 docker compose ps
 
 echo "==> health/readiness"
-check_wait "$SMOKE_WAIT" "address-api /healthz"   curl -sf http://127.0.0.1:8080/healthz
-check_wait "$SMOKE_WAIT" "address-api /readyz"    curl -sf http://127.0.0.1:8080/readyz
+check_wait "$SMOKE_WAIT" "address-api /healthz"   docker compose exec -T address-api wget -qO- http://127.0.0.1:9214/healthz
+check_wait "$SMOKE_WAIT" "address-api /readyz"    docker compose exec -T address-api wget -qO- http://127.0.0.1:9214/readyz
 check_wait "$SMOKE_WAIT" "suggester /readyz"      curl -sf http://127.0.0.1:9213/readyz
 check_wait "$SMOKE_WAIT" "indexer /readyz"        curl -sf http://127.0.0.1:9212/readyz
 check_wait "$SMOKE_WAIT" "importer /readyz"       curl -sf http://127.0.0.1:9211/readyz
@@ -56,7 +56,7 @@ echo "==> REST API"
 check "openapi.yaml"                curl -sf http://127.0.0.1:8080/openapi.yaml
 check "swagger ui"                  curl -sf http://127.0.0.1:8080/swagger/index.html
 check "web client"                  curl -sf http://127.0.0.1:8080/
-check "HTTP/2 prior knowledge"      curl -sf --http2-prior-knowledge http://127.0.0.1:8080/healthz
+check "HTTP/2 prior knowledge"      curl -sf --http2-prior-knowledge http://127.0.0.1:8080/openapi.yaml
 check "suggest 400 на пустой q"     test "$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:8080/api/v1/suggest')" = "400"
 
 echo "==> prometheus targets (приложения)"

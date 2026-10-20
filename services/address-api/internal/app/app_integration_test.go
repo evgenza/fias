@@ -74,6 +74,7 @@ func (f *fakeSuggester) last() *suggestv1.SuggestRequest {
 // environment — собранный стенд: PostgreSQL + Redis + fake suggester + сервис.
 type environment struct {
 	baseURL     string
+	adminURL    string
 	store       *storage.Store
 	redisClient *redis.Client
 	fake        *fakeSuggester
@@ -91,7 +92,7 @@ func TestAddressAPIEndToEnd(t *testing.T) {
 	env := setupEnvironment(t, ctx)
 
 	t.Run("readyz", func(t *testing.T) {
-		waitReady(t, ctx, env.baseURL+"/readyz")
+		waitReady(t, ctx, env.adminURL+"/readyz")
 	})
 
 	t.Run("suggest проксирует gRPC", func(t *testing.T) {
@@ -346,7 +347,7 @@ func TestAddressAPIEndToEnd(t *testing.T) {
 		protocols := new(http.Protocols)
 		protocols.SetUnencryptedHTTP2(true)
 		client := &http.Client{Transport: &http.Transport{Protocols: protocols}}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, env.baseURL+"/healthz", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, env.adminURL+"/healthz", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -364,7 +365,7 @@ func TestAddressAPIEndToEnd(t *testing.T) {
 	})
 
 	t.Run("metrics", func(t *testing.T) {
-		resp := get(t, ctx, env.baseURL+"/metrics")
+		resp := get(t, ctx, env.adminURL+"/metrics")
 		body := readBody(t, resp)
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("статус %d", resp.StatusCode)
@@ -431,6 +432,7 @@ func setupEnvironment(t *testing.T, ctx context.Context) *environment {
 	t.Cleanup(grpcServer.Stop)
 
 	httpAddr := fmt.Sprintf("127.0.0.1:%d", freePort(t))
+	adminAddr := fmt.Sprintf("127.0.0.1:%d", freePort(t))
 	appCtx, stopApp := context.WithCancel(ctx)
 	t.Cleanup(stopApp)
 	appErr := make(chan error, 1)
@@ -441,11 +443,13 @@ func setupEnvironment(t *testing.T, ctx context.Context) *environment {
 			RedisAddr:         redisAddr,
 			CacheTTL:          time.Minute,
 			HTTPAddr:          httpAddr,
+			AdminHTTPAddr:     adminAddr,
 		})
 	}()
 
 	return &environment{
 		baseURL:     "http://" + httpAddr,
+		adminURL:    "http://" + adminAddr,
 		store:       store,
 		redisClient: redisClient,
 		fake:        fake,

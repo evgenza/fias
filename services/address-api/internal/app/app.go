@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -34,10 +35,8 @@ const (
 	staticCacheControl = "public, max-age=3600"
 )
 
-// Run запускает address-api и работает до отмены контекста: один порт
-// (HTTPAddr) обслуживает REST API, служебные эндпоинты, Swagger UI
-// и веб-клиент по HTTP/1.1 и HTTP/2 prior-knowledge (h2c включается
-// в platform.RunHTTPServer).
+// Run serves public API/static content on HTTPAddr and operational routes
+// on the internal AdminHTTPAddr. Both listeners support HTTP/1.1 and h2c.
 func Run(ctx context.Context, cfg Config) error {
 	log := slog.Default()
 	shutdown, err := platform.InitTracing(ctx, serviceName)
@@ -100,7 +99,7 @@ func Run(ctx context.Context, cfg Config) error {
 		log:       log,
 	}
 
-	mux := newMux(h, registry, readyz(store.SQL(), cardCache, grpcConn, met, log))
+	mux := newMux(h)
 	// Цепочка middleware: трейсинг → метрики (шаблон маршрута как метка) → лог.
 	var root http.Handler = mux
 	root = logRequests(log, root)
@@ -116,13 +115,21 @@ func Run(ctx context.Context, cfg Config) error {
 	log.Info("address-api запущен",
 		"addr", cfg.HTTPAddr, "suggester", cfg.SuggesterGRPCAddr,
 		"redis", cfg.RedisAddr, "cache_ttl", cfg.CacheTTL)
-	return platform.RunHTTPServer(ctx, cfg.HTTPAddr, root)
+	admin := platform.HealthMux(readyz(store.SQL(), cardCache, grpcConn, met, log))
+	admin.Handle("/metrics", registry.Handler())
+	adminAddr := cfg.AdminHTTPAddr
+	if adminAddr == "" {
+		adminAddr = ":9214"
+	}
+	group, serverCtx := errgroup.WithContext(ctx)
+	group.Go(func() error { return platform.RunHTTPServer(serverCtx, cfg.HTTPAddr, root) })
+	group.Go(func() error { return platform.RunHTTPServer(serverCtx, adminAddr, admin) })
+	return group.Wait()
 }
 
 // newMux собирает маршруты сервиса (паттерны Go 1.22+).
-func newMux(h *handler, registry *platform.Metrics, ready func(context.Context) error) *http.ServeMux {
-	mux := platform.HealthMux(ready)
-	mux.Handle("/metrics", registry.Handler())
+func newMux(h *handler) *http.ServeMux {
+	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/v1/suggest", apiDeadline(h.handleSuggest))
 	mux.HandleFunc("GET /api/v1/addresses/{id}", apiDeadline(h.handleAddress))
