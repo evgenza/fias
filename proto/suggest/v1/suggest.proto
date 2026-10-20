@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package suggest.v1;
+
+option go_package = "gar-importer/proto/suggest/v1;suggestv1";
+
+// Suggester — сервис подсказок адресов ГАР поверх поискового индекса
+// Elasticsearch (документы индекса gar-addresses).
+service Suggester {
+  // GetAddress возвращает адрес по object_id (unary).
+  rpc GetAddress(GetAddressRequest) returns (Address);
+  // Suggest возвращает список подсказок по подстроке адреса (unary).
+  rpc Suggest(SuggestRequest) returns (SuggestResponse);
+  // StreamSuggestions стримит подсказки: сначала prefix-совпадения, затем
+  // fuzzy-добор, если лимит не исчерпан (server-streaming).
+  rpc StreamSuggestions(SuggestRequest) returns (stream Address);
+}
+
+// Address — адресный объект поискового индекса ГАР.
+message Address {
+  // object_id — идентификатор объекта ГАР (int64 как строка).
+  string object_id = 1;
+  string object_guid = 2;
+  // kind — вид объекта: addr_obj, house, apartment, room, stead, carplace.
+  string kind = 3;
+  // full_address — адресная строка («г Москва, ул Тверская, д 7»).
+  string full_address = 4;
+  // name — наименование собственного элемента («Тверская»).
+  string name = 5;
+  // type_name — сокращение типа собственного элемента («ул»).
+  string type_name = 6;
+  // region — код региона без ведущих нулей («77»).
+  string region = 7;
+  // level — уровень объекта (reestr_objects.level_id).
+  int32 level = 8;
+  bool is_actual = 9;
+  bool is_active = 10;
+  // score — релевантность поискового ответа (0 для GetAddress).
+  double score = 11;
+}
+
+// GetAddressRequest — запрос адреса по идентификатору объекта.
+message GetAddressRequest {
+  string object_id = 1;
+}
+
+// SuggestRequest — запрос подсказок по подстроке адреса.
+message SuggestRequest {
+  // query — подстрока адреса (обязательна).
+  string query = 1;
+  // limit — максимум подсказок (0 — по умолчанию 10, потолок 50).
+  int32 limit = 2;
+  // region — фильтр по коду региона (пусто — все регионы).
+  string region = 3;
+  // actual_only — только актуальные и активные объекты.
+  bool actual_only = 4;
+}
+
+// SuggestResponse — список подсказок.
+message SuggestResponse {
+  repeated Address addresses = 1;
+}

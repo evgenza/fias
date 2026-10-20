@@ -1,0 +1,10 @@
+version: v2
+plugins:
+  # Локальные плагины собираются из tool-зависимостей модуля в ./bin
+  # (см. proto/README.md); buf находит их через PATH.
+  - local: protoc-gen-go
+    out: proto
+    opt: paths=source_relative
+  - local: protoc-gen-go-grpc
+    out: proto
+    opt: paths=source_relative
