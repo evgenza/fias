@@ -12,6 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -71,7 +72,7 @@ func Run(ctx context.Context, cfg Config) error {
 	cardCache := newCache(redisClient, cfg.CacheTTL, log, met)
 
 	// gRPC-клиент suggester: ленивое соединение, Connect запускает его сразу,
-	// чтобы /readyz отражал реальную связность.
+	// чтобы начать подключение до первого запроса.
 	grpcConn, err := grpc.NewClient(cfg.SuggesterGRPCAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
@@ -96,9 +97,10 @@ func Run(ctx context.Context, cfg Config) error {
 	var root http.Handler = mux
 	root = logRequests(log, root)
 	root = httpMetrics.HTTPMiddleware(routeLabel)(root)
+	root = spanRouteName(root)
 	root = otelhttp.NewHandler(root, "address-api",
 		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
-			return r.Method + " " + r.URL.Path
+			return "address-api"
 		}))
 	// h2c (HTTP/1.1 и HTTP/2 prior-knowledge на одном порту) включается
 	// в platform.RunHTTPServer через Server.Protocols.
@@ -179,6 +181,22 @@ func routeLabel(r *http.Request) string {
 		return path
 	}
 	return pattern
+}
+
+// spanRouteName переименовывает активный спан по шаблону маршрута после
+// отработки mux (r.Pattern заполняется ServeMux до вызова обработчика):
+// каждый object_id не порождает отдельное имя спана.
+func spanRouteName(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+		if r.Pattern == "" {
+			return
+		}
+		span := trace.SpanFromContext(r.Context())
+		if span.IsRecording() {
+			span.SetName(r.Pattern)
+		}
+	})
 }
 
 // logRequests — JSON-лог каждого запроса: метод, путь, код, длительность.

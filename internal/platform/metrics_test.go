@@ -56,3 +56,29 @@ func TestHTTPMiddlewareDefaults(t *testing.T) {
 		t.Fatalf("счётчик по умолчанию не найден:\n%s", body)
 	}
 }
+
+// Тест проверяет, что произвольный HTTP-метод не создаёт новые серии:
+// метод вне белого списка складывается в метку «OTHER».
+func TestHTTPMiddlewareMethodWhitelist(t *testing.T) {
+	metrics := NewRegistry("test-service")
+	httpMetrics := metrics.HTTPServerMetrics()
+	handler := httpMetrics.HTTPMiddleware(nil)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("EVIL", "/raw/path", nil))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodDelete, "/raw/path", nil))
+
+	response := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body, _ := io.ReadAll(response.Result().Body)
+	output := string(body)
+	if strings.Contains(output, `method="EVIL"`) {
+		t.Fatalf("сырой метод попал в метки:\n%s", output)
+	}
+	if !strings.Contains(output, `method="OTHER"`) {
+		t.Fatalf("метод вне белого списка не складывается в OTHER:\n%s", output)
+	}
+	if !strings.Contains(output, `method="DELETE"`) {
+		t.Fatalf("стандартный метод должен сохраняться:\n%s", output)
+	}
+}

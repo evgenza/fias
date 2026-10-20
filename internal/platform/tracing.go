@@ -26,10 +26,10 @@ func InitTracing(ctx context.Context, service string) (func(context.Context) err
 	if err != nil {
 		return nil, fmt.Errorf("tracing: ресурс: %w", err)
 	}
-	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(tracesRatio()))
-	// Пропагация контекста W3C работает и без экспортёра.
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{}, propagation.Baggage{}))
+	sampler := newSampler(tracesRatio())
+	// Пропагация контекста W3C работает и без экспортёра. Baggage не
+	// пропагаем: на публичной границе входящий baggage ничем не фильтруется.
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
 		// Коллектор не задан: спаны создаются, но отбрасываются.
 		otel.SetTracerProvider(noop.NewTracerProvider())
@@ -46,6 +46,18 @@ func InitTracing(ctx context.Context, service string) (func(context.Context) err
 	)
 	otel.SetTracerProvider(provider)
 	return provider.Shutdown, nil
+}
+
+// newSampler — ParentBased-сэмплер, не доверяющий входящему sampled-флагу:
+// удалённый родитель с публичной границы может принудительно включать 100%
+// выборку, поэтому и для sampled, и для not sampled удалённых родителей
+// применяем собственную долю.
+func newSampler(ratio float64) sdktrace.Sampler {
+	local := sdktrace.TraceIDRatioBased(ratio)
+	return sdktrace.ParentBased(local,
+		sdktrace.WithRemoteParentSampled(local),
+		sdktrace.WithRemoteParentNotSampled(local),
+	)
 }
 
 // tracesRatio разбирает OTEL_TRACES_RATIO; некорректные значения — как 1.0.

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Тест проверяет noop-режим: без OTEL_EXPORTER_OTLP_ENDPOINT провайдер
@@ -19,6 +21,28 @@ func TestInitTracingNoop(t *testing.T) {
 	span.End()
 	if err := shutdown(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Тест проверяет, что внешний sampled-флаг из входящего traceparent не
+// принуждает к записи: при доле выборки 0 спан с удалённым sampled-родителем
+// отбрасывается. На публичной границе входящему traceparent не доверяют.
+func TestSamplerIgnoresRemoteSampledFlag(t *testing.T) {
+	sampler := newSampler(0)
+	parent := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    trace.TraceID{0x01},
+		SpanID:     trace.SpanID{0x02},
+		TraceFlags: trace.FlagsSampled,
+		Remote:     true,
+	})
+	ctx := trace.ContextWithRemoteSpanContext(context.Background(), parent)
+	result := sampler.ShouldSample(sdktrace.SamplingParameters{
+		ParentContext: ctx,
+		TraceID:       parent.TraceID(),
+		Name:          "GET /api/v1/addresses/1",
+	})
+	if result.Decision != sdktrace.Drop {
+		t.Fatalf("удалённый sampled-родитель при ratio=0: got %v, want Drop", result.Decision)
 	}
 }
 

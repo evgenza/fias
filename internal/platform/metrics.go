@@ -82,7 +82,7 @@ func (m *HTTPServerMetrics) HTTPMiddleware(labeler func(r *http.Request) string)
 			started := time.Now()
 			next.ServeHTTP(recorder, r)
 			labels := prometheus.Labels{
-				"method": r.Method,
+				"method": methodLabel(r.Method),
 				"path":   labeler(r),
 				"code":   strconv.Itoa(recorder.code),
 			}
@@ -90,6 +90,19 @@ func (m *HTTPServerMetrics) HTTPMiddleware(labeler func(r *http.Request) string)
 			m.duration.With(labels).Observe(time.Since(started).Seconds())
 		})
 	}
+}
+
+// methodLabel — белый список методов для метки method: выдуманный клиентом
+// метод («EVIL») не должен создавать новые временные ряды, всё нестандартное
+// складывается в «OTHER».
+func methodLabel(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodConnect,
+		http.MethodOptions, http.MethodTrace:
+		return method
+	}
+	return "OTHER"
 }
 
 // statusRecorder перехватывает код ответа обработчика.
