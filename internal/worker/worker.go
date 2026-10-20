@@ -148,12 +148,12 @@ func Run(ctx context.Context, cfg Config) error {
 	if _, err := events.EnsureStream(ctx, js); err != nil {
 		return err
 	}
-	requests, err := events.NewSubscriber(js).SubscribeImportRequests(ctx, consumerDurable)
+	registry := platform.NewRegistry(cfg.ServiceName)
+	requests, err := events.NewSubscriber(js).WithMetrics(registry).SubscribeImportRequests(ctx, consumerDurable)
 	if err != nil {
 		return err
 	}
 
-	registry := platform.NewRegistry(cfg.ServiceName)
 	w := &worker{
 		cfg:             cfg,
 		logger:          logger,
@@ -265,7 +265,7 @@ func (w *worker) handle(ctx context.Context, msg events.ImportRequestMsg) {
 	default:
 		span.RecordError(err)
 		logger.Warn("временная ошибка задачи, повторная доставка", "error", err)
-		if nerr := msg.Nak(nakDelay); nerr != nil {
+		if nerr := msg.Retry(err, nakDelay); nerr != nil {
 			logger.Error("запрос повторной доставки", "error", nerr)
 		}
 		w.metrics.tasksTotal.WithLabelValues("nak").Inc()

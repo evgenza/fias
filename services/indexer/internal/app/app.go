@@ -123,7 +123,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if _, err := events.EnsureStream(ctx, js); err != nil {
 		return err
 	}
-	subscriber := events.NewSubscriber(js)
+	subscriber := events.NewSubscriber(js).WithMetrics(registry)
 	messages, err := subscriber.SubscribeObjectsChanged(ctx, durableName)
 	if err != nil {
 		return err
@@ -209,7 +209,7 @@ func (s *service) handle(ctx context.Context, msg events.ObjectsChangedMsg) {
 		span.RecordError(err)
 		log.Error("пересборка индекса не удалась, повторная доставка", "error", err, "delay", nakDelay)
 		s.metrics.events.WithLabelValues(event.Kind, "error").Inc()
-		if nackErr := msg.Nak(nakDelay); nackErr != nil {
+		if nackErr := msg.Retry(err, nakDelay); nackErr != nil {
 			log.Error("nak", "error", nackErr)
 		}
 		return

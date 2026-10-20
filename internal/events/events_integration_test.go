@@ -3,8 +3,13 @@
 package events_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +17,7 @@ import (
 	tcnats "github.com/testcontainers/testcontainers-go/modules/nats"
 
 	"gar-importer/internal/events"
+	"gar-importer/internal/platform"
 )
 
 // Тест поднимает NATS в контейнере и проверяет круговой обмен обоих типов
@@ -267,4 +273,79 @@ func TestLongProcessingAndExistingConsumer(t *testing.T) {
 	if err := next.Ack(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestExhaustedAndMalformedMessagesAreObservable(t *testing.T) {
+	_, js := connectJetStream(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if _, err := events.EnsureStream(ctx, js); err != nil {
+		t.Fatal(err)
+	}
+	sub, err := js.SubscribeSync("gar.dlq.>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sub.Unsubscribe() }()
+	var logs bytes.Buffer
+	oldLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	defer slog.SetDefault(oldLogger)
+	registry := platform.NewRegistry("dlq-test")
+	requests, err := events.NewSubscriber(js).WithMetrics(registry).SubscribeImportRequests(ctx, "dlq-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := events.NewPublisher(js).PublishImportRequested(ctx, events.ImportRequested{RequestID: "exhaust", Key: "broken.zip"}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 10; i++ {
+		msg := receive(t, requests)
+		if err := msg.Nak(time.Millisecond); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dead, err := sub.NextMsg(3 * time.Second)
+	if err != nil {
+		t.Fatalf("missing DLQ message: %v", err)
+	}
+	var envelope struct {
+		RawPayload []byte `json:"raw_payload"`
+	}
+	if err := json.Unmarshal(dead.Data, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if dead.Subject != "gar.dlq."+events.SubjectImportRequested || !strings.Contains(string(envelope.RawPayload), "broken.zip") {
+		t.Fatalf("bad DLQ: %+v", dead)
+	}
+	if _, err := js.Publish(events.SubjectImportRequested, []byte("{broken")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sub.NextMsg(3 * time.Second); err != nil {
+		t.Fatalf("missing malformed DLQ: %v", err)
+	}
+	// Wait for Term after publication, then inspect the exposed service metrics.
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		recorder := httptest.NewRecorder()
+		registry.Handler().ServeHTTP(recorder, httptest.NewRequest("GET", "/metrics", nil))
+		if strings.Contains(recorder.Body.String(), `reason="payload"`) && strings.Contains(recorder.Body.String(), `reason="max_deliver"`) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("termination metrics missing")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !strings.Contains(logs.String(), "reason=max_deliver") || !strings.Contains(logs.String(), "reason=payload") {
+		t.Fatalf("termination logs missing: %s", logs.String())
+	}
+	info, err := js.StreamInfo(events.StreamName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Config.MaxAge <= 0 || info.Config.MaxBytes <= 0 || info.Config.Discard != nats.DiscardNew {
+		t.Fatalf("unbounded stream: %+v", info.Config)
+	}
+
 }

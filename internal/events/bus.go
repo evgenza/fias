@@ -46,6 +46,9 @@ func EnsureStream(ctx context.Context, js nats.JetStreamContext) (*nats.StreamIn
 			Retention: nats.LimitsPolicy,
 			Storage:   nats.FileStorage,
 			Replicas:  1,
+			MaxAge:    30 * 24 * time.Hour,
+			MaxBytes:  10 << 30,
+			Discard:   nats.DiscardNew,
 		}
 		created, err := js.AddStream(config, nats.Context(ctx))
 		if err != nil {
@@ -55,14 +58,22 @@ func EnsureStream(ctx context.Context, js nats.JetStreamContext) (*nats.StreamIn
 	case err != nil:
 		return nil, fmt.Errorf("events: чтение потока %s: %w", StreamName, err)
 	}
-	for _, subject := range info.Config.Subjects {
+	updated := info.Config
+	found := false
+	for _, subject := range updated.Subjects {
 		if subject == StreamSubjects {
-			return info, nil
+			found = true
 		}
 	}
-	// У потока нет subject-ов платформы: дополняем, не трогая чужие.
-	updated := info.Config
-	updated.Subjects = append(append([]string{}, info.Config.Subjects...), StreamSubjects)
+	if !found {
+		updated.Subjects = append(append([]string{}, updated.Subjects...), StreamSubjects)
+	}
+	if found && updated.MaxAge == 30*24*time.Hour && updated.MaxBytes == 10<<30 && updated.Discard == nats.DiscardNew {
+		return info, nil
+	}
+	updated.MaxAge = 30 * 24 * time.Hour
+	updated.MaxBytes = 10 << 30
+	updated.Discard = nats.DiscardNew
 	info, err = js.UpdateStream(&updated, nats.Context(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("events: обновление потока %s: %w", StreamName, err)

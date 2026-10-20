@@ -72,7 +72,7 @@ suggester, инфраструктура и CI. Находки сверены с 
   сообщение ровно один раз; конфигурация consumer обновляется у существующего
   durable.
 
-### [ ] A2. Сообщения теряются молча после MaxDeliver — High
+### [x] A2. Сообщения теряются молча после MaxDeliver — High
 - **Зависимости:** A1.
 - **Файлы:** `internal/events/subscriber.go`, `internal/events/bus.go` (~43–49),
   `internal/worker/worker.go`, `services/indexer/internal/app/app.go`.
@@ -636,3 +636,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | D1 | [x] | Readiness зависит от PostgreSQL, будит IDLE gRPC и публикует состояние Redis/suggester в метриках; клиент получает только not ready, подробности логируются. Тест на отказ необязательных зависимостей и пробуждение IDLE, build, vet, lint, unit и integration прошли. |
 
 | 2026-10-20 | A1 | [x] | NATS-тест подтвердил AckWait=BackOff[0]; явные 30 с, heartbeat 15 с, Fetch(1) с ожиданием Ack/Nak/Term, миграция durable. Обработчик 35 с без повторов; build, vet, lint, unit и integration прошли. |
+
+| 2026-10-20 | A2 | [x] | DLQ перед Term, исходные байты/причина/доставки, логи и gar_events_terminated_total; прикладной лимит 10, сервер unlimited для восстановления после отказа DLQ. Поток 30 суток/10 GiB/DiscardNew; DeliverAll сохранён для восстановления индекса. Build/vet/lint/unit/integration прошли. |
