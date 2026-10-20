@@ -6,8 +6,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"strings"
 
@@ -53,8 +53,7 @@ func (s *Suggester) GetAddress(ctx context.Context, req *suggestv1.GetAddressReq
 	}
 	hits, err := s.searchES(ctx, query)
 	if err != nil {
-		s.log.ErrorContext(ctx, "запрос Elasticsearch не удался", "error", err)
-		return nil, status.Error(codes.Unavailable, "поисковый индекс временно недоступен")
+		return nil, s.searchError(ctx, err)
 	}
 	if len(hits) == 0 {
 		return nil, status.Errorf(codes.NotFound, "адрес с object_id %s не найден", id)
@@ -71,8 +70,7 @@ func (s *Suggester) Suggest(ctx context.Context, req *suggestv1.SuggestRequest) 
 	}
 	hits, err := s.searchES(ctx, suggestQuery(query, req, limit, false, nil))
 	if err != nil {
-		s.log.ErrorContext(ctx, "запрос Elasticsearch не удался", "error", err)
-		return nil, status.Error(codes.Unavailable, "поисковый индекс временно недоступен")
+		return nil, s.searchError(ctx, err)
 	}
 	resp := &suggestv1.SuggestResponse{Addresses: make([]*suggestv1.Address, 0, len(hits))}
 	for _, h := range hits {
@@ -97,8 +95,7 @@ func (s *Suggester) StreamSuggestions(req *suggestv1.SuggestRequest, stream sugg
 	// Первая порция: prefix-совпадения.
 	hits, err := s.searchES(ctx, suggestQuery(query, req, limit, false, nil))
 	if err != nil {
-		s.log.ErrorContext(ctx, "запрос Elasticsearch не удался", "error", err)
-		return status.Error(codes.Unavailable, "поисковый индекс временно недоступен")
+		return s.searchError(ctx, err)
 	}
 	for _, h := range hits {
 		if err := sendAddress(ctx, stream, h); err != nil {
@@ -121,8 +118,7 @@ func (s *Suggester) StreamSuggestions(req *suggestv1.SuggestRequest, stream sugg
 		}
 		hits, err := s.searchES(ctx, suggestQuery(query, req, limit-delivered, true, excluded))
 		if err != nil {
-			s.log.ErrorContext(ctx, "fuzzy-запрос Elasticsearch не удался", "error", err)
-			return status.Error(codes.Unavailable, "поисковый индекс временно недоступен")
+			return s.searchError(ctx, err)
 		}
 		for _, h := range hits {
 			if err := sendAddress(ctx, stream, h); err != nil {
@@ -147,6 +143,9 @@ func sendAddress(ctx context.Context, stream suggestv1.Suggester_StreamSuggestio
 // query (без краевых пробелов) и limit (по умолчанию 10, потолок 50).
 func validateSuggest(req *suggestv1.SuggestRequest) (string, int, error) {
 	query := strings.TrimSpace(req.GetQuery())
+	if err := search.ValidateSuggestInput(req.GetQuery(), strings.TrimSpace(req.GetRegion())); err != nil {
+		return "", 0, status.Error(codes.InvalidArgument, err.Error())
+	}
 	if query == "" {
 		return "", 0, status.Error(codes.InvalidArgument, "query не задан")
 	}
@@ -226,8 +225,7 @@ func (s *Suggester) searchES(ctx context.Context, query map[string]any) ([]hit, 
 	}
 	defer resp.Body.Close()
 	if resp.IsError() {
-		data, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("suggester: Elasticsearch: %s: %s", resp.Status(), strings.TrimSpace(string(data)))
+		return nil, &esStatusError{code: resp.StatusCode}
 	}
 	var result struct {
 		Hits struct {
@@ -260,4 +258,27 @@ func toProto(h hit) *suggestv1.Address {
 		IsActive:    doc.IsActive,
 		Score:       score,
 	}
+}
+
+type esStatusError struct{ code int }
+
+func (e *esStatusError) Error() string { return fmt.Sprintf("Elasticsearch HTTP %d", e.code) }
+
+func (s *Suggester) searchError(ctx context.Context, err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		s.log.InfoContext(ctx, "поиск прерван", "error", err)
+		return status.FromContextError(err).Err()
+	}
+	var esErr *esStatusError
+	if errors.As(err, &esErr) && esErr.code >= 400 && esErr.code < 500 {
+		if esErr.code == 400 || esErr.code == 422 {
+			return status.Error(codes.InvalidArgument, "поисковый запрос отклонён")
+		}
+		if esErr.code != 429 {
+			s.log.ErrorContext(ctx, "ошибка конфигурации Elasticsearch", "status", esErr.code)
+			return status.Error(codes.Internal, "ошибка поискового индекса")
+		}
+	}
+	s.log.ErrorContext(ctx, "поисковый индекс недоступен", "error", err)
+	return status.Error(codes.Unavailable, "поисковый индекс временно недоступен")
 }

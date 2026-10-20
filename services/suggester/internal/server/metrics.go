@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -40,6 +41,7 @@ func (m *Metrics) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		started := time.Now()
 		resp, err := handler(ctx, req)
+		err = normalizeContextError(err)
 		m.observe(info.FullMethod, status.Code(err), started)
 		return resp, err
 	}
@@ -50,6 +52,7 @@ func (m *Metrics) StreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		started := time.Now()
 		err := handler(srv, stream)
+		err = normalizeContextError(err)
 		m.observe(info.FullMethod, status.Code(err), started)
 		return err
 	}
@@ -59,4 +62,11 @@ func (m *Metrics) StreamServerInterceptor() grpc.StreamServerInterceptor {
 func (m *Metrics) observe(method string, code interface{ String() string }, started time.Time) {
 	m.requests.WithLabelValues(method, code.String()).Inc()
 	m.duration.WithLabelValues(method, code.String()).Observe(time.Since(started).Seconds())
+}
+
+func normalizeContextError(err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return status.FromContextError(err).Err()
+	}
+	return err
 }

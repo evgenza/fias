@@ -329,3 +329,6 @@ HTTP: read 15s, write 30s, idle 120s, headers 64KiB; API contexts 10s. Shutdown 
 
 ## 2026-10-20 — D4
 Children descriptions share ancestor/dictionary loads. Registry level selects own table; legacy objects without registry remain supported. Hierarchy-only parents are accepted. Cold page of 200 children uses 8 SQL queries. Web page limit is 50.
+
+## 2026-10-20 — D5
+Suggest accepts up to 200 runes/20 words, region up to three ASCII digits. Cancellation/deadlines map to HTTP 499/504 and gRPC context status. ES request errors map to InvalidArgument or Internal; 429/5xx remain Unavailable. ES error bodies are omitted from logs.

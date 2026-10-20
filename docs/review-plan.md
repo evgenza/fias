@@ -433,7 +433,7 @@ suggester, инфраструктура и CI. Находки сверены с 
   - лимит по умолчанию в веб-клиенте — 50.
 - **Готово, когда:** число SQL на запрос `/children?limit=200` ≤ 10 (тест со счётчиком).
 
-### [ ] D5. Валидация ввода и коды ошибок — Medium
+### [x] D5. Валидация ввода и коды ошибок — Medium
 - **Файлы:** `services/address-api/internal/app/handlers.go` (~87, 120–123, 251),
   `services/suggester/internal/server/server.go` (~73–75, 115, 140, 148–163, 228–231),
   `services/suggester/internal/server/metrics.go` (~43, 53).
@@ -664,3 +664,5 @@ suggester, инфраструктура и CI. Находки сверены с 
 | 2026-10-20 | D2 | [x] | HTTP limits, API deadline 10s, readiness drain 2s, forced shutdown cancels and waits for handlers; tracing shutdown bounded to 5s. Platform/API tests pass. |
 
 | 2026-10-20 | D4 | [x] | Batch descriptions with shared ancestors, registry level routing, EXISTS for hierarchy-only parents, web limit 50; PostgreSQL pg_stat_statements regression: 200 children = 8 SQL on cold cache. |
+
+| 2026-10-20 | D5 | [x] | Shared q/region validation on HTTP/gRPC, ES 4xx mapped without response body leakage (429 remains retryable), cancellation/deadline → 499/504 and Info; gRPC metrics normalize context errors. Validation/error tests pass. |

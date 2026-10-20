@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"gar-importer/internal/address"
+	"gar-importer/internal/search"
 	"gar-importer/internal/storage"
 	suggestv1 "gar-importer/proto/suggest/v1"
 )
@@ -85,6 +86,11 @@ type handler struct {
 // handleSuggest — GET /api/v1/suggest: проксирование Suggester.Suggest.
 func (h *handler) handleSuggest(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if err := search.ValidateSuggestInput(r.URL.Query().Get("q"), strings.TrimSpace(r.URL.Query().Get("region"))); err != nil {
+		h.metrics.suggest.WithLabelValues("invalid").Inc()
+		writeError(w, http.StatusBadRequest, codeValidation, err.Error())
+		return
+	}
 	if query == "" {
 		h.metrics.suggest.WithLabelValues("invalid").Inc()
 		writeError(w, http.StatusBadRequest, codeValidation, "параметр q не задан")
@@ -110,11 +116,14 @@ func (h *handler) handleSuggest(w http.ResponseWriter, r *http.Request) {
 		ActualOnly: actualOnly,
 	})
 	if err != nil {
+		if h.writeContextError(w, r, err) {
+			return
+		}
 		switch status.Code(err) {
 		case codes.InvalidArgument:
 			h.metrics.suggest.WithLabelValues("invalid").Inc()
 			writeError(w, http.StatusBadRequest, codeValidation, "suggester отклонил запрос")
-		case codes.Unavailable, codes.DeadlineExceeded:
+		case codes.Unavailable:
 			h.metrics.suggest.WithLabelValues("unavailable").Inc()
 			writeError(w, http.StatusServiceUnavailable, codeUnavailable, "сервис подсказок временно недоступен")
 		default:
@@ -230,6 +239,9 @@ func (h *handler) describeWithChildren(ctx context.Context, objectID int64, with
 
 // writeDescribeError отображает ошибку DescribeObject на коды API.
 func (h *handler) writeDescribeError(w http.ResponseWriter, r *http.Request, objectID int64, err error) {
+	if h.writeContextError(w, r, err) {
+		return
+	}
 	if errors.Is(err, address.ErrNotFound) {
 		writeError(w, http.StatusNotFound, codeNotFound, fmt.Sprintf("адресный объект %d не найден", objectID))
 		return
@@ -319,4 +331,19 @@ func detailsFromDescription(desc *address.Description) *addressDetails {
 		IsActive:       desc.IsActive,
 		ParentObjectID: desc.ParentObjectID,
 	}
+}
+
+func (h *handler) writeContextError(w http.ResponseWriter, r *http.Request, err error) bool {
+	code := status.Code(err)
+	switch {
+	case errors.Is(err, context.Canceled) || code == codes.Canceled:
+		h.log.InfoContext(r.Context(), "запрос отменён")
+		writeError(w, 499, "CANCELED", "запрос отменён")
+	case errors.Is(err, context.DeadlineExceeded) || code == codes.DeadlineExceeded:
+		h.log.InfoContext(r.Context(), "превышено время запроса")
+		writeError(w, http.StatusGatewayTimeout, "TIMEOUT", "превышено время запроса")
+	default:
+		return false
+	}
+	return true
 }
